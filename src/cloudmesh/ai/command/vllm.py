@@ -77,7 +77,7 @@ def get_default_host(db=None):
     default_server_name = db.get("cloudmesh.ai.default.server")
     if default_server_name:
         # 2. Resolve the host for that server
-        servers = db.get("cloudmesh.ai.servers", {})
+        servers = db.get("cloudmesh.ai.server", {})
         if isinstance(servers, dict):
             host = servers.get(default_server_name, {}).get("host")
             if host:
@@ -144,7 +144,7 @@ class VLLMServiceSelector(App):
 
 def select_vllm_service(db, group_filter=None):
     """Interactively select a vLLM service from the available configurations using Textual."""
-    servers = db.get("cloudmesh.ai.servers", {})
+    servers = db.get("cloudmesh.ai.server", {})
     
     if not servers:
         console.error("No vLLM server configurations found in the config file.")
@@ -189,7 +189,7 @@ def start(name, tunnel, ui, sbatch):
                 raise ValueError("No service name provided. Use 'cmc llm start [NAME]' or 'cmc llm start --ui'.")
 
         # Resolve host from the service name in the config
-        servers = db.get("cloudmesh.ai.servers", {})
+        servers = db.get("cloudmesh.ai.server", {})
         target_host = None
         group = None
         if isinstance(servers, dict):
@@ -303,7 +303,7 @@ def stop(name, tunnel):
     try:
         config_path = os.path.expanduser("~/.config/cloudmesh/llm.yaml")
         db = YamlDB(filename=config_path)
-        servers = db.get("cloudmesh.ai.servers", {})
+        servers = db.get("cloudmesh.ai.server", {})
         target_host = None
         if isinstance(servers, dict):
             target_host = servers.get(name, {}).get("host")
@@ -331,7 +331,7 @@ def kill(name, tunnel):
     try:
         config_path = os.path.expanduser("~/.config/cloudmesh/llm.yaml")
         db = YamlDB(filename=config_path)
-        servers = db.get("cloudmesh.ai.servers", {})
+        servers = db.get("cloudmesh.ai.server", {})
         target_host = None
         if isinstance(servers, dict):
             target_host = servers.get(name, {}).get("host")
@@ -358,7 +358,7 @@ def status(name):
     try:
         config_path = os.path.expanduser("~/.config/cloudmesh/llm.yaml")
         db = YamlDB(filename=config_path)
-        servers = db.get("cloudmesh.ai.servers", {})
+        servers = db.get("cloudmesh.ai.server", {})
         target_host = None
         group = None
         if isinstance(servers, dict):
@@ -397,7 +397,7 @@ def logs(name):
     try:
         config_path = os.path.expanduser("~/.config/cloudmesh/llm.yaml")
         db = YamlDB(filename=config_path)
-        servers = db.get("cloudmesh.ai.servers", {})
+        servers = db.get("cloudmesh.ai.server", {})
         target_host = None
         group = None
         if isinstance(servers, dict):
@@ -465,7 +465,7 @@ def configure():
         console.print(banner("vLLM Configuration", f"Config File: {config_path}\nCurrent Default Host: [bold]{current_host or 'Not set'}[/bold]"))
         
         # 3. List available hosts from servers config
-        servers = db.get("cloudmesh.ai.servers", {})
+        servers = db.get("cloudmesh.ai.server", {})
         available_hosts = set()
         if isinstance(servers, dict):
             for config in servers.values():

@@ -6,8 +6,8 @@ class VLLMConfig:
         self.db = db
         self.group = group
         self.name = name
-        # The combined YAML structure is: cloudmesh -> ai -> servers -> name
-        self._data = self.db.get(f"cloudmesh.ai.servers.{name}", {})
+        # The combined YAML structure is: cloudmesh -> ai -> server -> name
+        self._data = self.db.get(f"cloudmesh.ai.server.{name}", {})
 
     def get(self, key, default=None):
         """Retrieve a configuration value with an optional default."""
@@ -42,7 +42,7 @@ class VLLMConfig:
                     "    default:\n"
                     "      server: gemma-4-31b\n"
                     "      client: default-client\n"
-                    "    servers:\n"
+                    "    server:\n"
                     "      gemma-4-31b:\n"
                     "        host: dgx-node-1\n"
                     "        model: google/gemma-4-31B-it\n"
