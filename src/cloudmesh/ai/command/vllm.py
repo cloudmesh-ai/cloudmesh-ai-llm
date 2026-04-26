@@ -7,10 +7,7 @@ server containers on DGX and UVA hosts using named configurations.
 
 Usage Examples:
 -------------------------------------------------------------------------------
-1. Set a default host:
-   $ cmc llm set-host dgx-node-1
-
-2. Set a default service:
+1. Set a default service:
    $ cmc llm default uva-default
 
 3. Start an LLM server using interactive UI:
@@ -41,11 +38,10 @@ Usage:
     llm kill [NAME] [--tunnel]
     llm status [NAME]
     llm logs [NAME]
-    llm set-host [HOST]
     llm default [NAME]
     llm configure
     llm prompt [text] [--file <file>]
-    llm -h | --help
+    add 
 """
 
 import click
@@ -83,8 +79,7 @@ def get_default_host(db=None):
             if host:
                 return host
     
-    # Fallback to legacy config.default_host
-    return db.get("config.default_host")
+    return None
 
 class RenderVLLMTable:
     """Helper class to render vLLM configurations into a Textual DataTable."""
@@ -424,11 +419,11 @@ def info():
         config_path = os.path.expanduser("~/.config/cloudmesh/llm.yaml")
         db = YamlDB(filename=config_path)
         
-        current_host = db.get("config.default_host")
+        default_server = db.get("cloudmesh.ai.default.server")
         
         info_content = (
             f"Config File: {config_path}\n"
-            f"Default Host: [bold]{current_host or 'Not set'}[/bold]"
+            f"Default Server: [bold]{default_server or 'Not set'}[/bold]"
         )
         console.print(banner("vLLM Configuration Info", info_content))
         
@@ -460,36 +455,30 @@ def configure():
         db = YamlDB(filename=config_path)
         
         # 2. Current state
-        current_host = db.get("config.default_host")
+        current_server = db.get("cloudmesh.ai.default.server")
         
-        console.print(banner("vLLM Configuration", f"Config File: {config_path}\nCurrent Default Host: [bold]{current_host or 'Not set'}[/bold]"))
+        console.print(banner("vLLM Configuration", f"Config File: {config_path}\nCurrent Default Server: [bold]{current_server or 'Not set'}[/bold]"))
         
-        # 3. List available hosts from servers config
+        # 3. List available servers from server config
         servers = db.get("cloudmesh.ai.server", {})
-        available_hosts = set()
-        if isinstance(servers, dict):
-            for config in servers.values():
-                if isinstance(config, dict) and config.get("host"):
-                    available_hosts.add(config.get("host"))
-        
-        if available_hosts:
-            console.print("\n[bold]Available hosts in vllm_servers.yaml:[/bold]")
-            for host in sorted(list(available_hosts)):
-                marker = "[green]✓[/green]" if host == current_host else " "
-                console.print(f" {marker} {host}")
+        if servers:
+            console.print("\n[bold]Available servers in llm.yaml:[/bold]")
+            for name in sorted(servers.keys()):
+                marker = "[green]✓[/green]" if name == current_server else " "
+                console.print(f" {marker} {name}")
         else:
-            console.warning("No hosts found in vllm_servers.yaml.")
+            console.warning("No servers found in llm.yaml.")
 
         # 4. Interactive prompt
         console.print("\n")
-        prompt_text = f"Enter default host [{current_host}]: " if current_host else "Enter default host: "
-        new_host = input(prompt_text).strip()
+        prompt_text = f"Enter default server [{current_server}]: " if current_server else "Enter default server: "
+        new_server = input(prompt_text).strip()
         
-        if new_host and new_host != current_host:
-            db.set("config.default_host", new_host)
-            console.ok(f"Default host updated to: {new_host}")
-        elif not new_host and not current_host:
-            console.error("A host must be specified.")
+        if new_server and new_server != current_server:
+            db.set("cloudmesh.ai.default.server", new_server)
+            console.ok(f"Default server updated to: {new_server}")
+        elif not new_server and not current_server:
+            console.error("A server must be specified.")
         else:
             console.msg("No changes made to configuration.")
             
