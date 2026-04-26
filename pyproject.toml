@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cloudmesh-ai-llm"
+
+dynamic = ["version"]
+description = "Extension vllm created by CME"
+license = "Apache-2.0"
+dependencies = [
+    "click",
+    "rich",
+    "cloudmesh-ai-common",
+    "cloudmesh-ai-cmc",
+]
+[tool.setuptools.dynamic]
+version = {file = "VERSION"}
+
+[project.entry-points."cloudmesh.ai.command"]
+vllm = "cloudmesh.ai.command.vllm:vllm_group"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["cloudmesh*"]
