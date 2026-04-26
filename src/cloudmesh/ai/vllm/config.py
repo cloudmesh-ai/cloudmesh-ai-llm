@@ -37,9 +37,6 @@ class VLLMConfig:
                 
                 # Initialize with the new unified structure
                 combined_content = (
-                    "config:\n"
-                    "  default_host: dgx\n"
-                    "  default_service: gemma-4-31b\n\n"
                     "cloudmesh:\n"
                     "  ai:\n"
                     "    default:\n"

@@ -125,10 +125,6 @@ Located at `~/.config/cloudmesh/llm.yaml`. This file contains both the server de
 
 Example Configuration:
 ```yaml
-config:
-  default_host: dgx-node-1
-  default_service: gemma-4-31b
-
 cloudmesh:
   ai:
     default:
