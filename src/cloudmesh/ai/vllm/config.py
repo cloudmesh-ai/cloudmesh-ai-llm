@@ -38,8 +38,9 @@ class VLLMConfig:
             if os.path.exists(source_path):
                 os.makedirs(os.path.dirname(dest_path), exist_ok=True)
                 
-                # Initialize with the new unified structure
+                # Initialize with the new unified structure using YamlDB features
                 combined_content = (
+                    "#load ~/.config/cloudmesh/keys.yaml\n"
                     "cloudmesh:\n"
                     "  ai:\n"
                     "    default:\n"
@@ -57,6 +58,7 @@ class VLLMConfig:
                     "      openwebui:\n"
                     "        host: localhost\n"
                     "        port: 3000\n"
+                    "        openai_api_key: \"{SERVER_MASTER_KEY}\"\n"
                 )
                 
                 with open(dest_path, "w") as dst:

@@ -28,9 +28,18 @@ from cloudmesh.ai.vllm.config import VLLMConfig
 from cloudmesh.ai.vllm.client import VLLMClient
 from yamldb import YamlDB
 
-def get_vllm_api_key(config, keys_path_override=None):
-    """Retrieve vLLM API key from main config or a specified keys file."""
-    # 1. Try main config
+def get_vllm_api_key(config, keys_path_override=None, lookup_key=None):
+    """Retrieve vLLM API key from main config or a specified keys file.
+    
+    If lookup_key is provided, it is used as the key to find the secret in the keys file.
+    Otherwise, it defaults to looking for 'VLLM_API_KEY'.
+    """
+    # 1. Try main config (specific lookup key first, then default)
+    if lookup_key:
+        api_key = config.get(f"ai.llm.{lookup_key}")
+        if api_key:
+            return api_key
+            
     api_key = config.get("ai.llm.vllm_api_key")
     if api_key:
         return api_key
@@ -43,8 +52,13 @@ def get_vllm_api_key(config, keys_path_override=None):
         try:
             with open(keys_path, "r") as f:
                 keys = yaml.safe_load(f)
-                if keys and "VLLM_API_KEY" in keys:
-                    return keys["VLLM_API_KEY"]
+                if not keys:
+                    return None
+                
+                # Use the provided lookup_key (e.g., 'SERVER_MASTER_KEY') or default to 'VLLM_API_KEY'
+                target_key = lookup_key or "VLLM_API_KEY"
+                if target_key in keys:
+                    return keys[target_key]
         except Exception:
             pass
     
@@ -228,25 +242,25 @@ class AiderLauncher:
     """Handles the launch of Aider with vLLM backend."""
 
     def __init__(self):
-        self.config = Config()
+        self.docker = DockerManager()
+        # Use YamlDB to load the resolved configuration in memory
+        self.db = YamlDB(filename=os.path.expanduser("~/.config/cloudmesh/llm.yaml"), backend=":memory:")
 
     def launch(self, client_config=None):
         """Launch the aider CLI with required environment variables."""
-        # Aider and its dependencies (like numpy) are most stable on Python 3.10-3.12.
-        # Versions 3.13+ often fail due to removed modules (e.g., pkgutil.ImpImporter).
-        if not (sys.version_info.major == 3 and 10 <= sys.version_info.minor <= 12):
-            console.error(f"Aider is most stable on Python 3.10 to 3.12. Current version: {sys.version.split()[0]}")
-            console.print("Python 3.13+ is currently causing installation failures with dependencies.")
-            return
-
-        api_key = get_vllm_api_key(self.config, keys_path_override=client_config.get("keys") if client_config else None)
-        aider_config = self.config.get("ai.llm.aider", {})
+        # Use resolved config from YamlDB - check both client and llm paths for compatibility
+        aider_config = self.db.get("cloudmesh.ai.client.aider") or self.db.get("cloudmesh.ai.llm.aider", {})
         
-        model = aider_config.get("model", "google/gemma-4-31B-it")
-        base_url = aider_config.get("base_url", "http://127.0.0.1:8001/v1")
+        # Merge with client_config if provided
+        config = {**aider_config, **(client_config or {})}
+        
+        # Support both uppercase and lowercase keys
+        api_key = config.get("OPENAI_API_KEY") or config.get("openai_api_key")
+        model = config.get("model", "google/gemma-4-31B-it")
+        base_url = config.get("OPENAI_API_BASE") or config.get("openai_api_base") or config.get("base_url", "http://127.0.0.1:8001/v1")
         
         if not api_key:
-            console.error("vllm_api_key not found in configuration.")
+            console.error("openai_api_key not found in resolved configuration.")
             return
 
         console.print(banner("Launching Aider", f"Backend: {base_url}\nModel: {model}"))
@@ -258,20 +272,99 @@ class AiderLauncher:
             "OPENAI_API_BASE": base_url,
         })
         
+        aider_model = self._get_aider_model(model)
         try:
             # Launch aider with the specified model
-            subprocess.run(["aider", "--model", f"openai/{model}"], env=env, check=True)
+            subprocess.run(["aider", "--model", aider_model], env=env, check=True)
         except FileNotFoundError:
             console.error("'aider' command not found. Please install Aider.")
         except subprocess.CalledProcessError as e:
             console.error(f"Aider exited with error: {e}")
+
+    def _get_aider_model(self, model):
+        """Ensure the model has the 'openai/' prefix for litellm/aider to recognize the provider."""
+        if not any(model.startswith(p + "/") for p in ["openai", "anthropic", "google", "azure"]):
+            return f"openai/{model}"
+        return model
+
+    def launch_docker(self, client_config=None, force=False):
+        """Launch Aider inside a Docker container to avoid Python version issues."""
+        # Use resolved config from YamlDB - check both client and llm paths for compatibility
+        aider_config = self.db.get("cloudmesh.ai.client.aider") or self.db.get("cloudmesh.ai.llm.aider", {})
+        
+        # Merge with client_config if provided
+        config = {**aider_config, **(client_config or {})}
+        
+        # Support both uppercase and lowercase keys
+        api_key = config.get("OPENAI_API_KEY") or config.get("openai_api_key")
+        model = config.get("model", "google/gemma-4-31B-it")
+        base_url = config.get("OPENAI_API_BASE") or config.get("openai_api_base") or config.get("base_url", "http://host.docker.internal:8001/v1")
+        
+        # In Docker, localhost refers to the container. Replace with host.docker.internal to reach the host.
+        if base_url:
+            base_url = base_url.replace("localhost", "host.docker.internal").replace("127.0.0.1", "host.docker.internal")
+            
+        container_name = "cloudmesh-aider"
+        
+        if not api_key:
+            console.error("openai_api_key not found in resolved configuration.")
+            return
+
+        # Debug: show a hint of the key being used to help troubleshoot 401 errors
+        key_hint = f"{api_key[:4]}...{api_key[-4:]}" if len(api_key) > 8 else "****"
+        console.print(f"[dim]Using API Key: {key_hint}[/dim]")
+
+        # If force is True, remove the existing container to rebuild from scratch
+        if force:
+            console.print(banner("Force Rebuilding Aider Container", f"Container: {container_name}"))
+            self.docker.stop_container(container_name)
+            container_exists = False
+        else:
+            # Check if container already exists
+            container_exists = False
+            try:
+                result = subprocess.run(["docker", "inspect", container_name], capture_output=True, text=True)
+                if result.returncode == 0:
+                    container_exists = True
+            except FileNotFoundError:
+                console.error("Docker not found. Please install Docker.")
+                return
+
+        aider_model = self._get_aider_model(model)
+
+        if container_exists:
+            console.print(banner("Restarting Aider Container", f"Container: {container_name}"))
+            # Use 'start -ai' to attach to the existing container interactively
+            cmd = f"docker start -ai {container_name}"
+        else:
+            console.print(banner("Creating Aider Container", f"Model: {aider_model}\nMounting current directory..."))
+            # Create container without --rm, give it a name, and install dependencies once
+            cmd = textwrap.dedent(f"""\
+                docker run -it \\
+                  --name {container_name} \\
+                  -v "$(pwd):/app" \\
+                  -w /app \\
+                  --add-host=host.docker.internal:host-gateway \\
+                  -e OPENAI_API_KEY="{api_key}" \\
+                  -e OPENAI_API_BASE="{base_url}" \\
+                  python:3.12-slim \\
+                  /bin/bash -c "apt-get update && apt-get install -y pandoc && pip install --quiet --no-cache-dir aider-chat && aider --model {aider_model}"
+            """).strip()
+
+        console.print(f"[blue]Executing Docker command:[/blue]\n{cmd}")
+        
+        try:
+            subprocess.run(cmd, check=True, shell=True)
+        except subprocess.CalledProcessError as e:
+            console.error(f"Aider Docker container exited with error: {e}")
 
 class VLLMOrchestrator:
     """Orchestrates the full pipeline from server start to client launch."""
 
     def __init__(self):
         self.config_path = os.path.expanduser("~/.config/cloudmesh/llm.yaml")
-        self.db = YamlDB(filename=self.config_path)
+        # Use :memory: backend to avoid writing back changes to the config file
+        self.db = YamlDB(filename=self.config_path, backend=":memory:")
 
     def prepare_backend(self, name):
         """Ensure vLLM server is running, tunneled, and healthy."""
@@ -345,10 +438,43 @@ def launch_claude():
     launcher.launch()
 
 @launch_group.command(name="aider")
-def launch_aider():
+@click.option("--docker", is_flag=True, help="Run Aider in a Docker container to avoid Python version issues")
+@click.option("--force", is_flag=True, help="Force rebuild the container from scratch")
+def launch_aider(docker, force):
     """Launch Aider with vLLM backend."""
     launcher = AiderLauncher()
-    launcher.launch()
+    if docker:
+        launcher.launch_docker(force=force)
+    else:
+        launcher.launch()
+
+@launch_group.group(name="config")
+def config_group():
+    """Manage AI configuration."""
+    pass
+
+@config_group.command(name="info")
+def config_info():
+    """Print the resolved in-memory LLM configuration."""
+    try:
+        orchestrator = VLLMOrchestrator()
+        # YamlDB.yaml() returns the current state of self.data as YAML
+        # Since load() resolves variables and merges #load files, this is the final resolved state
+        resolved_yaml = orchestrator.db.yaml()
+        
+        if not resolved_yaml or resolved_yaml == "{}":
+            console.warning("The in-memory configuration is empty. This may be due to a loading error or an empty config file.")
+        else:
+            console.print(banner("In-Memory Resolved Configuration", f"Source: {orchestrator.config_path}\n\n{resolved_yaml}"))
+            
+    except yaml.YAMLError as e:
+        error_msg = f"YAML Syntax Error in configuration file:\n{e}"
+        if hasattr(e, 'problem_mark'):
+            mark = e.problem_mark
+            error_msg += f"\nLocation: Line {mark.line + 1}, Column {mark.column + 1}"
+        console.error(error_msg)
+    except Exception as e:
+        console.error(f"Error retrieving configuration info: {e}")
 
 @launch_group.command(name="llm")
 @click.argument("name")
@@ -445,6 +571,16 @@ def install_tool(tool):
         try:
             subprocess.run([sys.executable, "-m", "pip", "install", "aider-chat"], check=True)
             console.ok("Aider installed successfully!")
+            
+            # Check for pandoc dependency
+            try:
+                subprocess.run(["pandoc", "--version"], capture_output=True, check=True)
+            except (subprocess.CalledProcessError, FileNotFoundError):
+                console.warning("Pandoc not found! Aider requires pandoc for some file conversions.")
+                if os_is_mac():
+                    console.print("Please install it using: 'brew install pandoc'")
+                else:
+                    console.print("Please install pandoc using your system package manager.")
         except subprocess.CalledProcessError as e:
             console.error(f"Failed to install Aider: {e}")
     else:
