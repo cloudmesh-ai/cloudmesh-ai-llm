@@ -15,7 +15,7 @@ def test_server_uva_load_examples(tmp_path):
         
         # Check if examples were loaded into the DB
         # Based on vllm_servers_example.yaml, we expect 'gemma-4-31b'
-        config = server.db.get("gemma-4-31b")
+        config = server.db.get("cloudmesh.ai.uva.gemma-4-31b")
         assert config is not None
         assert "model" in config
         assert "image" in config
@@ -30,7 +30,7 @@ def test_server_dgx_load_examples(tmp_path):
         
         # Check if examples were loaded into the DB
         # Based on vllm_servers_example.yaml, we expect 'gemma-4-31b'
-        config = server.db.get("gemma-4-31b")
+        config = server.db.get("cloudmesh.ai.dgx.gemma-4-31b")
         assert config is not None
         assert "model" in config
         assert "image" in config

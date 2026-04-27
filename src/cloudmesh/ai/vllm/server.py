@@ -2,6 +2,7 @@ from abc import ABC, abstractmethod
 import subprocess
 import logging
 import os
+import yaml
 
 class Server(ABC):
     """
@@ -11,6 +12,17 @@ class Server(ABC):
     def __init__(self, host: str):
         self.host = host
         self.logger = logging.getLogger(self.__class__.__name__)
+
+    def _load_examples_if_missing(self, db, config_path):
+        """Load example configurations if the main config file is empty or does not exist."""
+        if not db.data:
+            self.logger.info(f"Config file {config_path} is empty or not found. Loading examples...")
+            example_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "vllm_servers_example.yaml")
+            if os.path.exists(example_path):
+                db.load(filename=example_path)
+                db.save(filename=config_path)
+            else:
+                self.logger.warning(f"Example config file {example_path} not found.")
 
     def _run_remote(self, cmd: str) -> subprocess.CompletedProcess:
         """

@@ -159,11 +159,12 @@ def select_vllm_service(db, group_filter=None):
     
     return app.selected_service, None, app.selected_host
 
-def get_server(host):
+def get_server(host, db=None):
     """Helper to instantiate the correct server class based on host."""
-    if "uva" in host.lower() or "rivanna" in host.lower():
-        return ServerUVA(host)
-    return ServerDGX(host)
+    host_str = str(host)
+    if "uva" in host_str.lower() or "rivanna" in host_str.lower():
+        return ServerUVA(host_str, db=db)
+    return ServerDGX(host_str, db=db)
 
 @click.group()
 def llm_group():
@@ -175,7 +176,9 @@ def llm_group():
 @click.option("--tunnel", is_flag=True, help="Create an SSH tunnel to the server")
 @click.option("--ui", is_flag=True, help="Interactively select the vLLM service from a table")
 @click.option("--sbatch", is_flag=True, help="Use Slurm sbatch instead of ijob (UVA only)")
-def start(name, tunnel, ui, sbatch):
+@click.option("--device", help="Explicitly specify GPU device IDs (e.g. '0,1,2,3')")
+@click.option("--dryrun", is_flag=True, help="Dry run mode")
+def start(name, tunnel, ui, sbatch, device, dryrun):
     """Start a vLLM server using a named configuration."""
     try:
         config_path = os.path.expanduser("~/.config/cloudmesh/llm.yaml")
@@ -205,12 +208,16 @@ def start(name, tunnel, ui, sbatch):
             target_host = get_default_host(db)
             if not target_host:
                 raise ValueError(f"Could not resolve host for service '{name}' and no default host configured.")
-            # Try to guess group based on default host
-            group = "uva" if ("uva" in target_host.lower() or "rivanna" in target_host.lower()) else "dgx"
         
-        server = get_server(target_host)
+        target_host = str(target_host)
+        group = "uva" if ("uva" in target_host.lower() or "rivanna" in target_host.lower()) else "dgx"
+        server = get_server(target_host, db=db)
         config = VLLMConfig(db, group, name)
         
+        if device:
+            # Override the default device configuration if provided
+            config.set("device", device)
+            
         start_cmd = server.get_start_command(name)
         
         # Banner 1: Server Details
@@ -223,7 +230,8 @@ def start(name, tunnel, ui, sbatch):
         # Banner 2: Execution Plan
         ijob_helper = IJob(db).get(group, name)
         user = ijob_helper.username()
-        working_dir = config.get('working_dir', '/scratch/$USER/cloudmesh/run').replace("$USER", user)
+        working_dir_val = config.get('working_dir', '/scratch/$USER/cloudmesh/run')
+        working_dir = str(working_dir_val).replace("$USER", user)
         script_path = f"{working_dir}/start_{name}.sh"
         exec_mode = "sbatch" if sbatch else "ijob"
         
@@ -283,21 +291,24 @@ def start(name, tunnel, ui, sbatch):
             console.warning("Start cancelled by user.")
             return
         
-        with RemoteExecutor(target_host) as executor:
-            executor.execute(f"mkdir -p {working_dir}")
-            executor.write_remote_file(start_cmd, script_path)
-            executor.execute(f"chmod +x {script_path}")
-            executor.execute(f"{exec_cmd_display} {script_path}")
-        
-        server.start(name, sbatch=sbatch)
-        console.ok(f"Successfully started vLLM server '{name}' on {target_host}")
+        if not dryrun:
+            with RemoteExecutor(str(target_host)) as executor:
+                executor.execute(f"mkdir -p {str(working_dir)}")
+                executor.write_remote_file(str(start_cmd), str(script_path))
+                executor.execute(f"chmod +x {str(script_path)}")
+                executor.execute(f"{str(exec_cmd_display)} {str(script_path)}")
+            console.ok(f"Successfully started vLLM server '{name}' on {target_host}")
+        else:
+            console.banner("DRY-RUN", "Execution skipped as requested.")
         
         if tunnel:
             console.print(f"[blue]Creating SSH tunnel to {target_host}...[/blue]")
             server.tunnel(name)
             console.ok(f"SSH tunnel created: localhost:{config.get('port', '8000')} -> {target_host}")
     except Exception as e:
+        import traceback
         console.error(f"Error starting vLLM server: {e}")
+        console.print(traceback.format_exc())
 
 @llm_group.command(name="stop")
 @click.argument("name")
@@ -458,7 +469,7 @@ def info():
     except Exception as e:
         console.error(f"Error retrieving configuration info: {e}")
 
-@llm_group.command(name="tunnel")
+@click.group(name="tunnel")
 def tunnel_group():
     """Tunnel management commands."""
     pass

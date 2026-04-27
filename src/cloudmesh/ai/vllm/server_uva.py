@@ -11,11 +11,15 @@ class ServerUVA(Server):
     vLLM server implementation for UVA.
     """
 
-    def __init__(self, host: str):
+    def __init__(self, host: str, db=None):
         super().__init__(host)
-        # Use a standard path for the vLLM server configurations
-        config_path = os.path.expanduser("~/.config/cloudmesh/ai/vllm_servers.yaml")
-        self.db = YamlDB(filename=config_path)
+        if db:
+            self.db = db
+        else:
+            # Use a standard path for the vLLM server configurations
+            config_path = os.path.expanduser("~/.config/cloudmesh/ai/vllm_servers.yaml")
+            self.db = YamlDB(filename=config_path)
+            self._load_examples_if_missing(self.db, config_path)
 
     def _get_config(self, name: str) -> dict:
         """Retrieve configuration for a specific server name from the YAML DB."""

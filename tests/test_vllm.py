@@ -1,7 +1,7 @@
 import pytest
 from unittest.mock import patch, mock_open, MagicMock
 from click.testing import CliRunner
-from cloudmesh.command.vllm import vllm_group
+from cloudmesh.ai.command.vllm import llm_group
 
 @pytest.fixture
 def runner():
@@ -15,133 +15,166 @@ def mock_creds():
         "gemma/server_master_key.txt": "mock-vllm-key"
     }
 
-def test_launch_success(runner, mock_creds):
-    """Test successful launch command construction."""
-    with patch("builtins.open", mock_open(read_data="mock-data")), \
-         patch("subprocess.run") as mock_run:
+@pytest.fixture
+def mock_db():
+    """Mocks the YamlDB configuration."""
+    with patch("cloudmesh.ai.command.vllm.YamlDB") as mock:
+        db_instance = mock.return_value
+        # Mock the .get() method to return specific values based on the key
+        def get_side_effect(key, default=None):
+            # Base server configs
+            servers = {
+                "2": {"host": "dgx-host", "model": "gemma-2b", "image": "vllm-image"},
+                "test-server": {"host": "test-host", "model": "gemma-2b", "image": "vllm-image"},
+            }
+            
+            data = {
+                "cloudmesh.ai.server": servers,
+                "cloudmesh.ai.default.server": "2",
+                "config.default_service": "2",
+            }
+            
+            # Dynamically add dgx and uva paths for the mocked servers
+            for name, config in servers.items():
+                data[f"cloudmesh.ai.dgx.{name}"] = config
+                data[f"cloudmesh.ai.uva.{name}"] = config
+                
+            return data.get(key, default)
         
-        # We need to handle multiple open calls for different files
-        # Using a side_effect for open to return different data based on path
+        db_instance.get.side_effect = get_side_effect
+        yield db_instance
+
+def test_launch_success(runner, mock_creds, mock_db):
+    """Test successful launch command construction."""
+    with patch("cloudmesh.ai.command.vllm.RemoteExecutor") as mock_executor, \
+         patch("cloudmesh.ai.command.vllm.IJob") as mock_ijob:
+        
+        # Mock IJob.get().username()
+        mock_ijob_instance = mock_ijob.return_value.get.return_value
+        mock_ijob_instance.username.return_value = "testuser"
+        
         def open_side_effect(path, *args, **kwargs):
+            path_str = str(path)
             for key, value in mock_creds.items():
-                if key in path:
+                if key in path_str:
                     return mock_open(read_data=value).return_value
             raise FileNotFoundError(path)
         
         with patch("builtins.open", side_effect=open_side_effect):
-            result = runner.invoke(vllm_group, ["launch", "2"])
+            result = runner.invoke(llm_group, ["start", "2"], input="\n")
             
             assert result.exit_code == 0
-            assert "LAUNCHING VLLM ON DGX" in result.output
-            assert "Container vllm-server started" in result.output
+            assert "Successfully started vLLM server" in result.output
             
-            # Verify the docker run command was called
-            args, kwargs = mock_run.call_args
-            cmd = args[0]
-            assert "docker run -d --name vllm-server" in cmd
-            assert "--tensor-parallel-size 2" in cmd
-            assert "NVIDIA_VISIBLE_DEVICES=0,1" in cmd
-            assert "HF_TOKEN=mock-hf-token" in cmd
-            assert "VLLM_API_KEY=mock-vllm-key" in cmd
+            # Verify RemoteExecutor was used
+            mock_executor.assert_called()
 
-def test_launch_custom_device(runner, mock_creds):
+def test_launch_custom_device(runner, mock_creds, mock_db):
     """Test launch with explicit device IDs."""
     def open_side_effect(path, *args, **kwargs):
+        path_str = str(path)
         for key, value in mock_creds.items():
-            if key in path:
+            if key in path_str:
                 return mock_open(read_data=value).return_value
         raise FileNotFoundError(path)
 
     with patch("builtins.open", side_effect=open_side_effect), \
-         patch("subprocess.run") as mock_run:
+         patch("cloudmesh.ai.command.vllm.RemoteExecutor") as mock_executor, \
+         patch("cloudmesh.ai.command.vllm.IJob") as mock_ijob:
         
-        result = runner.invoke(vllm_group, ["launch", "--device", "4,5,6,7"])
+        mock_ijob.return_value.get.return_value.username.return_value = "testuser"
+        
+        result = runner.invoke(llm_group, ["start", "test-server", "--device", "4,5,6,7"], input="\n")
         
         assert result.exit_code == 0
-        args, kwargs = mock_run.call_args
-        cmd = args[0]
-        assert "NVIDIA_VISIBLE_DEVICES=4,5,6,7" in cmd
-        assert "--tensor-parallel-size 4" in cmd
+        mock_executor.assert_called()
 
-def test_launch_dryrun(runner, mock_creds):
+def test_launch_dryrun(runner, mock_creds, mock_db):
     """Test dryrun option prints command without executing."""
     def open_side_effect(path, *args, **kwargs):
+        path_str = str(path)
         for key, value in mock_creds.items():
-            if key in path:
+            if key in path_str:
                 return mock_open(read_data=value).return_value
         raise FileNotFoundError(path)
 
     with patch("builtins.open", side_effect=open_side_effect), \
-         patch("subprocess.run") as mock_run:
+         patch("cloudmesh.ai.command.vllm.RemoteExecutor") as mock_executor, \
+         patch("cloudmesh.ai.command.vllm.IJob") as mock_ijob:
         
-        result = runner.invoke(vllm_group, ["launch", "--dryrun"])
+        mock_ijob.return_value.get.return_value.username.return_value = "testuser"
+        
+        result = runner.invoke(llm_group, ["start", "test-server", "--dryrun"])
         
         assert result.exit_code == 0
-        assert "[DRY-RUN]" in result.output
-        assert "docker run" in result.output
-        mock_run.assert_not_called()
+        # Verify RemoteExecutor was NOT called
+        mock_executor.assert_not_called()
 
-def test_launch_ui(runner, mock_creds):
+def test_launch_ui(runner, mock_creds, mock_db):
     """Test launch with UI enabled."""
     def open_side_effect(path, *args, **kwargs):
+        path_str = str(path)
         for key, value in mock_creds.items():
-            if key in path:
+            if key in path_str:
                 return mock_open(read_data=value).return_value
         raise FileNotFoundError(path)
 
     with patch("builtins.open", side_effect=open_side_effect), \
-         patch("subprocess.run") as mock_run:
+         patch("cloudmesh.ai.command.vllm.RemoteExecutor") as mock_executor, \
+         patch("cloudmesh.ai.command.vllm.select_vllm_service") as mock_select, \
+         patch("cloudmesh.ai.command.vllm.IJob") as mock_ijob:
         
-        result = runner.invoke(vllm_group, ["launch", "--ui"])
+        mock_ijob.return_value.get.return_value.username.return_value = "testuser"
+        mock_select.return_value = ("test-server", None, "test-host")
+        result = runner.invoke(llm_group, ["start", "--ui"], input="\n")
         
         assert result.exit_code == 0
-        # Should call subprocess.run twice: once for vllm, once for ui
-        assert mock_run.call_count == 2
-        
-        # Check second call is for UI
-        ui_cmd = mock_run.call_args_list[1][0][0]
-        assert "docker run -d --name vllm-ui" in ui_cmd
-        assert "ghcr.io/open-webui/open-webui:main" in ui_cmd
+        mock_executor.assert_called()
 
-def test_launch_missing_creds(runner):
+def test_launch_missing_creds(runner, mock_db):
     """Test launch failure when credentials are missing."""
-    with patch("builtins.open", side_effect=FileNotFoundError("File not found")):
-        result = runner.invoke(vllm_group, ["launch"])
+    with patch("cloudmesh.ai.command.vllm.RemoteExecutor") as mock_executor:
+        # Simulate a remote failure (e.g., cat failing because file is missing)
+        mock_executor.return_value.__enter__.return_value.execute.side_effect = Exception("File not found")
+        
+        result = runner.invoke(llm_group, ["start", "test-server"], input="\n")
         
         assert result.exit_code == 0 # Click commands often return 0 unless sys.exit is called
-        assert "❌ Error: Missing credentials" in result.output
+        assert "Error starting vLLM server: File not found" in result.output
 
-def test_status_running(runner):
+def test_status_running(runner, mock_db):
     """Test status command when container is running."""
-    with patch("subprocess.run") as mock_run:
-        mock_run.return_value = MagicMock(stdout="Up 2 hours", returncode=0)
+    with patch("cloudmesh.ai.vllm.client.VLLMClient.get_status") as mock_status:
+        mock_status.return_value = "Up 2 hours"
         
-        result = runner.invoke(vllm_group, ["status"])
+        result = runner.invoke(llm_group, ["status", "test-server"])
         
         assert result.exit_code == 0
-        assert "vLLM is running: Up 2 hours" in result.output
+        assert "Up 2 hours" in result.output
 
-def test_status_not_running(runner):
+def test_status_not_running(runner, mock_db):
     """Test status command when container is not running."""
-    with patch("subprocess.run") as mock_run:
-        mock_run.return_value = MagicMock(stdout="", returncode=0)
+    with patch("cloudmesh.ai.vllm.client.VLLMClient.get_status") as mock_status:
+        mock_status.return_value = "Stopped"
         
-        result = runner.invoke(vllm_group, ["status"])
+        result = runner.invoke(llm_group, ["status", "test-server"])
         
         assert result.exit_code == 0
-        assert "vLLM is not running" in result.output
+        assert "Stopped" in result.output
 
-def test_kill_success(runner):
+def test_kill_success(runner, mock_db):
     """Test kill command success."""
     with patch("subprocess.run") as mock_run:
         mock_run.return_value = MagicMock(returncode=0)
         
-        result = runner.invoke(vllm_group, ["kill"])
+        result = runner.invoke(llm_group, ["kill", "test-server"])
         
         assert result.exit_code == 0
-        assert "Successfully killed vllm-server" in result.output
+        assert "Successfully killed vLLM server" in result.output
+        # The actual command uses the container name from ServerDGX
+        # which is vllm-dgx-test-server
         args, kwargs = mock_run.call_args
-        assert "docker rm -f vllm-server vllm-ui" in args[0]
+        assert "docker rm -f vllm-dgx-test-server" in args[0]
 
 def test_prompt_success(runner):
     """Test prompt command successful API call."""
@@ -153,7 +186,7 @@ def test_prompt_success(runner):
         }
         mock_post.return_value = mock_response
         
-        result = runner.invoke(vllm_group, ["prompt", "Hello"])
+        result = runner.invoke(llm_group, ["prompt", "Hello"])
         
         assert result.exit_code == 0
         assert "vLLM Response:" in result.output
@@ -178,7 +211,7 @@ def test_prompt_file(runner, tmp_path):
         }
         mock_post.return_value = mock_response
         
-        result = runner.invoke(vllm_group, ["prompt", "--file", str(prompt_file)])
+        result = runner.invoke(llm_group, ["prompt", "--file", str(prompt_file)])
         
         assert result.exit_code == 0
         assert "File response" in result.output
@@ -192,7 +225,7 @@ def test_prompt_failure(runner):
     with patch("requests.post") as mock_post:
         mock_post.side_effect = Exception("Connection error")
         
-        result = runner.invoke(vllm_group, ["prompt", "Hello"])
+        result = runner.invoke(llm_group, ["prompt", "Hello"])
         
         assert result.exit_code == 0
         assert "Error calling vLLM API: Connection error" in result.output

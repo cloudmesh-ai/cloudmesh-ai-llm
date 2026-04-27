@@ -13,6 +13,10 @@ class VLLMConfig:
         """Retrieve a configuration value with an optional default."""
         return self._data.get(key, default)
 
+    def set(self, key, value):
+        """Set a configuration value."""
+        self._data[key] = value
+
     @property
     def data(self):
         """Return the raw configuration dictionary."""
