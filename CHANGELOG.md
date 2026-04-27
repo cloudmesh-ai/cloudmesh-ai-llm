@@ -5,6 +5,8 @@ All notable changes to `cloudmesh-ai-llm` will be documented in this file.
 ## [7.0.4.dev1] - 2026-04-26
 
 ### Added
+- **Tool Installation**: Added `cmc launch install aider` to automate the installation of Aider with built-in Python version validation (3.10-3.12).
+- **WebUI Health Polling**: Implemented active polling of the WebUI port before opening the browser to prevent "Internal Server Error" on startup.
 - **Robust Error Handling**: Implemented a custom exception hierarchy for vLLM operations to provide clearer failure diagnostics.
 - **Advanced Tunnel Management**: Added PID tracking and automatic cleanup for SSH tunnels to prevent orphaned processes.
 - **Deep Health Checks**: Enhanced server status monitoring with a multi-stage state machine: `Offline` $\rightarrow$ `Starting` $\rightarrow$ `Ready`.
@@ -14,6 +16,7 @@ All notable changes to `cloudmesh-ai-llm` will be documented in this file.
 ### Changed
 - **Configuration Schema**:
     - Removed `default_host` and `default_service` from `VLLMConfig` in favor of dynamic defaulting.
+- **macOS Compatibility**: Updated browser launch mechanism to use `os.system("open ...")` for better reliability on macOS.
     - Changed YAML configuration keys from plural `servers` to singular `server` for consistency.
 - **Project Renaming**: Renamed project and command group from `vllm` to `llm` for broader applicability.
 - **Command Interface**:

@@ -15,6 +15,7 @@ import os
 import subprocess
 import textwrap
 import urllib.request
+import sys
 from rich.padding import Padding
 from cloudmesh.ai.common.config import Config
 from cloudmesh.ai.common import banner
@@ -231,6 +232,13 @@ class AiderLauncher:
 
     def launch(self, client_config=None):
         """Launch the aider CLI with required environment variables."""
+        # Aider and its dependencies (like numpy) are most stable on Python 3.10-3.12.
+        # Versions 3.13+ often fail due to removed modules (e.g., pkgutil.ImpImporter).
+        if not (sys.version_info.major == 3 and 10 <= sys.version_info.minor <= 12):
+            console.error(f"Aider is most stable on Python 3.10 to 3.12. Current version: {sys.version.split()[0]}")
+            console.print("Python 3.13+ is currently causing installation failures with dependencies.")
+            return
+
         api_key = get_vllm_api_key(self.config, keys_path_override=client_config.get("keys") if client_config else None)
         aider_config = self.config.get("ai.llm.aider", {})
         
@@ -420,6 +428,27 @@ def launch_vllm(name, ui, claude, info):
             console.error("Backend preparation failed.")
     except Exception as e:
         console.error(f"Error orchestrating vLLM launch: {e}")
+
+@launch_group.command(name="install")
+@click.argument("tool")
+def install_tool(tool):
+    """Install AI tools (e.g., aider)."""
+    if tool == "aider":
+        # Aider and its dependencies are most stable on Python 3.10-3.12.
+        if not (sys.version_info.major == 3 and 10 <= sys.version_info.minor <= 12):
+            console.error(f"Aider installation is most stable on Python 3.10-3.12. Current version: {sys.version.split()[0]}")
+            console.print("Python 3.13+ is causing 'AttributeError: module 'pkgutil' has no attribute 'ImpImporter'' during installation.")
+            console.print("Please use pyenv to install a compatible version: 'pyenv install 3.12.0 && pyenv local 3.12.0'")
+            return
+
+        console.print(banner("Installing Aider", "Running 'pip install aider-chat'..."))
+        try:
+            subprocess.run([sys.executable, "-m", "pip", "install", "aider-chat"], check=True)
+            console.ok("Aider installed successfully!")
+        except subprocess.CalledProcessError as e:
+            console.error(f"Failed to install Aider: {e}")
+    else:
+        console.error(f"Installation for tool '{tool}' is not supported. Supported tools: aider")
 
 @launch_group.command(name="stop")
 @click.argument("tool")

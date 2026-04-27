@@ -117,6 +117,10 @@ cmc launch webui
 # Launch only Claude (assumes backend is already ready)
 cmc launch claude
 
+# Install AI tools (e.g., aider)
+# Note: Aider requires Python 3.10-3.12
+cmc launch install aider
+
 # Stop a launched tool
 cmc launch stop webui
 ```
