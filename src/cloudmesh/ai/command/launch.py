@@ -119,10 +119,10 @@ class WebUILauncher:
     """Handles the lifecycle of the Open WebUI Docker container."""
 
     def __init__(self):
-        self.config = Config()
         self.docker = DockerManager()
+        # Use YamlDB to load the resolved configuration in memory
+        self.db = YamlDB(filename=os.path.expanduser("~/.config/cloudmesh/llm.yaml"), backend=":memory:")
         self.container_name = "open-webui"
-        self.webui_port = 3000
         self.local_tunnel_port = 8001
         self.image = "ghcr.io/open-webui/open-webui:main"
 
@@ -153,27 +153,32 @@ class WebUILauncher:
 
         self.docker.stop_container(self.container_name)
 
-        # Retrieve keys and config from cloudmesh.ai configuration
-        # Use client_config if provided to get the specific keys path
-        api_key = get_vllm_api_key(self.config, keys_path_override=client_config.get("keys") if client_config else None)
-        webui_name = self.config.get("ai.llm.webui_name", "Cloudmesh AI Portal")
+        # Use resolved config from YamlDB
+        webui_config = self.db.get("cloudmesh.ai.client.openwebui") or self.db.get("cloudmesh.ai.llm.openwebui", {})
+        config = {**webui_config, **(client_config or {})}
         
+        api_key = config.get("OPENAI_API_KEY") or config.get("openai_api_key")
+        webui_name = config.get("webui_name", "Cloudmesh AI Portal")
+        self.webui_port = config.get("PORT") or config.get("port", 3000)
+        
+        # Handle API Base for Docker
+        base_url = config.get("OPENAI_API_BASE") or config.get("openai_api_base") or config.get("base_url", f"http://host.docker.internal:{self.local_tunnel_port}/v1")
+        if base_url:
+            base_url = base_url.replace("localhost", "host.docker.internal").replace("127.0.0.1", "host.docker.internal")
+
         if not api_key:
-            console.error("vllm_api_key not found in configuration.")
-            console.print("Please set it in ~/.config/cloudmesh/ai/common.yaml or ~/.config/cloudmesh/keys.yaml")
+            console.error("openai_api_key not found in resolved configuration.")
             return
 
         console.print(banner("Launching Open WebUI", f"Image: {self.image}\nPort: {self.webui_port}"))
 
         # Construct the docker run command
-        # Quote values to prevent shell injection or parsing errors (especially for API keys)
-        # We use explicit backslashes for a nicely formatted multi-line command output
         cmd = textwrap.dedent(f"""\
             docker run -d \\
               -p {self.webui_port}:8080 \\
               --add-host=host.docker.internal:host-gateway \\
               -v open-webui:/app/backend/data \\
-              -e OPENAI_API_BASE_URL="http://host.docker.internal:{self.local_tunnel_port}/v1" \\
+              -e OPENAI_API_BASE_URL="{base_url}" \\
               -e OPENAI_API_KEY="{api_key}" \\
               -e VLLM_API_KEY="{api_key}" \\
               -e HF_TOKEN="{api_key}" \\
@@ -202,18 +207,24 @@ class ClaudeLauncher:
     """Handles the launch of Claude Code with vLLM backend."""
 
     def __init__(self):
-        self.config = Config()
+        # Use YamlDB to load the resolved configuration in memory
+        self.db = YamlDB(filename=os.path.expanduser("~/.config/cloudmesh/llm.yaml"), backend=":memory:")
 
     def launch(self, client_config=None):
         """Launch the claude CLI with required environment variables."""
-        api_key = get_vllm_api_key(self.config, keys_path_override=client_config.get("keys") if client_config else None)
-        claude_config = self.config.get("ai.llm.claude", {})
+        # Use resolved config from YamlDB - check both client and llm paths for compatibility
+        claude_config = self.db.get("cloudmesh.ai.client.claude") or self.db.get("cloudmesh.ai.llm.claude", {})
         
-        base_url = claude_config.get("base_url", "http://127.0.0.1:8001")
-        model = claude_config.get("model", "google/gemma-4-31B-it")
+        # Merge with client_config if provided
+        config = {**claude_config, **(client_config or {})}
+        
+        # Support both uppercase and lowercase keys
+        api_key = config.get("OPENAI_API_KEY") or config.get("openai_api_key")
+        model = config.get("model", "google/gemma-4-31B-it")
+        base_url = config.get("OPENAI_API_BASE") or config.get("openai_api_base") or config.get("base_url", "http://127.0.0.1:8001")
         
         if not api_key:
-            console.error("vllm_api_key not found in configuration.")
+            console.error("openai_api_key not found in resolved configuration.")
             return
 
         console.print(banner("Launching Claude Code", f"Backend: {base_url}\nModel: {model}"))
