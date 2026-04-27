@@ -123,6 +123,42 @@ cmc launch install aider
 
 # Stop a launched tool
 cmc launch stop webui
+
+## AI Clients
+
+The `launch` command supports several AI clients that can connect to your vLLM backend.
+
+### 1. Open WebUI
+A full-featured web interface for interacting with your LLMs.
+- **Setup**: No local installation required. The launcher automatically manages a Docker container.
+- **Configuration**: Defined under `cloudmesh.ai.client.openwebui` in `llm.yaml`.
+  - `OPENAI_API_KEY`: Your server master key.
+  - `OPENAI_API_BASE`: The API endpoint (e.g., `http://localhost:8001/v1`).
+  - `port`: The local port to expose the UI (default: `3000`).
+- **Run**: `cmc launch webui`
+
+### 2. Claude Code
+Anthropic's official CLI tool for agentic coding.
+- **Setup**: Requires local installation via npm:
+  ```bash
+  npm install -g @anthropic-ai/claude-code
+  ```
+- **Configuration**: Defined under `cloudmesh.ai.client.claude` in `llm.yaml`.
+  - `OPENAI_API_KEY`: Your server master key.
+  - `OPENAI_API_BASE`: The API endpoint.
+  - `ANTHROPIC_MODEL`: The model name (e.g., `google/gemma-4-31B-it`).
+  - `ANTHROPIC_AUTH_TOKEN`: Optional override for the API key.
+  - `CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS`: Set to `1` to disable betas.
+- **Run**: `cmc launch claude`
+
+### 3. Aider
+An AI pair programming tool that works directly in your terminal and git repo.
+- **Setup**: Handled automatically by the launcher via Docker.
+- **Configuration**: Defined under `cloudmesh.ai.client.aider` in `llm.yaml`.
+  - `OPENAI_API_KEY`: Your server master key.
+  - `OPENAI_API_BASE`: The API endpoint.
+  - `model`: The model name.
+- **Run**: `cmc launch aider --docker`
 ```
 
 ## Configuration
