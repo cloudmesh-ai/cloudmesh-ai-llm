@@ -2,9 +2,8 @@ import os
 
 class VLLMConfig:
     """Helper class to manage vLLM service configurations."""
-    def __init__(self, db, group, name):
+    def __init__(self, db, name):
         self.db = db
-        self.group = group
         self.name = name
         # The combined YAML structure is: cloudmesh -> ai -> server -> name
         self._data = self.db.get(f"cloudmesh.ai.server.{name}", {})
@@ -23,7 +22,7 @@ class VLLMConfig:
         return self._data
 
     def __repr__(self):
-        return f"VLLMConfig(group={self.group}, name={self.name})"
+        return f"VLLMConfig(name={self.name})"
 
     @staticmethod
     def reset():
@@ -45,7 +44,7 @@ class VLLMConfig:
                     "  ai:\n"
                     "    default:\n"
                     "      server: gemma-4-31b\n"
-                    "      client: default-client\n"
+                    "      client: openwebui\n"
                     "    server:\n"
                     "      gemma-4-31b:\n"
                     "        host: dgx-node-1\n"
@@ -54,7 +53,10 @@ class VLLMConfig:
                     "        port: 8000\n"
                     "        tensor_parallel_size: 4\n"
                     "        gpu_memory_utilization: 0.90\n"
-                    "    client: {}\n"
+                    "    client:\n"
+                    "      openwebui:\n"
+                    "        host: localhost\n"
+                    "        port: 3000\n"
                 )
                 
                 with open(dest_path, "w") as dst:

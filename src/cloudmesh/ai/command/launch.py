@@ -14,16 +14,40 @@ import click
 import os
 import subprocess
 import textwrap
+import urllib.request
 from rich.padding import Padding
 from cloudmesh.ai.common.config import Config
 from cloudmesh.ai.common import banner
 from cloudmesh.ai.common.io import console
 from cloudmesh.ai.common.sys import os_is_mac
 import time
+import yaml
 from cloudmesh.ai.command.vllm import get_server, get_default_host
 from cloudmesh.ai.vllm.config import VLLMConfig
 from cloudmesh.ai.vllm.client import VLLMClient
 from yamldb import YamlDB
+
+def get_vllm_api_key(config, keys_path_override=None):
+    """Retrieve vLLM API key from main config or a specified keys file."""
+    # 1. Try main config
+    api_key = config.get("ai.llm.vllm_api_key")
+    if api_key:
+        return api_key
+
+    # 2. Try keys file (either from config or default)
+    keys_path = keys_path_override or config.get("keys") or os.path.expanduser("~/.config/cloudmesh/keys.yaml")
+    keys_path = os.path.expanduser(keys_path).replace("$HOME", os.path.expanduser("~"))
+    
+    if os.path.exists(keys_path):
+        try:
+            with open(keys_path, "r") as f:
+                keys = yaml.safe_load(f)
+                if keys and "VLLM_API_KEY" in keys:
+                    return keys["VLLM_API_KEY"]
+        except Exception:
+            pass
+    
+    return None
 
 class DockerManager:
     """Handles Docker operations and lifecycle management."""
@@ -87,7 +111,27 @@ class WebUILauncher:
         self.local_tunnel_port = 8001
         self.image = "ghcr.io/open-webui/open-webui:main"
 
-    def launch(self):
+    def _wait_for_webui(self, timeout=30):
+        """Poll the WebUI port until it returns a successful response."""
+        url = f"http://localhost:{self.webui_port}"
+        console.print(f"[blue]Waiting for WebUI to be ready at {url}...[/blue]", end="")
+        
+        start_time = time.time()
+        while time.time() - start_time < timeout:
+            try:
+                with urllib.request.urlopen(url, timeout=1) as response:
+                    if response.getcode() == 200:
+                        console.print(" [bold green]Ready![/bold green]")
+                        return True
+            except Exception:
+                print(".", end="", flush=True)
+                time.sleep(1)
+        
+        console.print("\n")
+        console.warning("WebUI took too long to respond. Opening browser anyway...")
+        return False
+
+    def launch(self, client_config=None):
         """Launch the Open WebUI container."""
         if not self.docker.check_docker():
             return
@@ -95,39 +139,49 @@ class WebUILauncher:
         self.docker.stop_container(self.container_name)
 
         # Retrieve keys and config from cloudmesh.ai configuration
-        api_key = self.config.get("ai.llm.vllm_api_key")
+        # Use client_config if provided to get the specific keys path
+        api_key = get_vllm_api_key(self.config, keys_path_override=client_config.get("keys") if client_config else None)
         webui_name = self.config.get("ai.llm.webui_name", "Cloudmesh AI Portal")
         
         if not api_key:
             console.error("vllm_api_key not found in configuration.")
-            console.print("Please set it in ~/.config/cloudmesh/ai/common.yaml or via AI_AI_LLM_VLLM_API_KEY")
+            console.print("Please set it in ~/.config/cloudmesh/ai/common.yaml or ~/.config/cloudmesh/keys.yaml")
             return
 
         console.print(banner("Launching Open WebUI", f"Image: {self.image}\nPort: {self.webui_port}"))
 
         # Construct the docker run command
-        cmd = textwrap.dedent(f"""
-            docker run -d \
-              -p {self.webui_port}:8080 \
-              --add-host=host.docker.internal:host-gateway \
-              -v open-webui:/app/backend/data \
-              -e OPENAI_API_BASE_URL=http://host.docker.internal:{self.local_tunnel_port}/v1 \
-              -e OPENAI_API_KEY={api_key} \
-              -e VLLM_API_KEY={api_key} \
-              -e HF_TOKEN={api_key} \
-              -e WEBUI_NAME={webui_name} \
-              --name {self.container_name} \
-              --restart always \
+        # Quote values to prevent shell injection or parsing errors (especially for API keys)
+        # We use explicit backslashes for a nicely formatted multi-line command output
+        cmd = textwrap.dedent(f"""\
+            docker run -d \\
+              -p {self.webui_port}:8080 \\
+              --add-host=host.docker.internal:host-gateway \\
+              -v open-webui:/app/backend/data \\
+              -e OPENAI_API_BASE_URL="http://host.docker.internal:{self.local_tunnel_port}/v1" \\
+              -e OPENAI_API_KEY="{api_key}" \\
+              -e VLLM_API_KEY="{api_key}" \\
+              -e HF_TOKEN="{api_key}" \\
+              -e WEBUI_NAME="{webui_name}" \\
+              --name {self.container_name} \\
+              --restart always \\
               {self.image}
         """).strip()
+
+        console.print(f"[blue]Executing command:[/blue]\n{cmd}")
 
         if self.docker.run_container(cmd):
             success_msg = (
                 f"Setup Complete!\n"
                 f"1. Ensure your SSH tunnel is running (localhost:{self.local_tunnel_port} -> server).\n"
-                f"2. Access the UI at: http://localhost:{self.webui_port}"
+                f"2. Access the UI at: http://localhost:{self.webui_port}\n"
+                f"3. Opening the UI in your default browser in a few seconds..."
             )
             console.print(banner("Success", success_msg))
+            
+            # Wait for the application to be fully ready before opening the browser
+            self._wait_for_webui()
+            os.system(f"open http://localhost:{self.webui_port}")
 
 class ClaudeLauncher:
     """Handles the launch of Claude Code with vLLM backend."""
@@ -135,9 +189,9 @@ class ClaudeLauncher:
     def __init__(self):
         self.config = Config()
 
-    def launch(self):
+    def launch(self, client_config=None):
         """Launch the claude CLI with required environment variables."""
-        api_key = self.config.get("ai.llm.vllm_api_key")
+        api_key = get_vllm_api_key(self.config, keys_path_override=client_config.get("keys") if client_config else None)
         claude_config = self.config.get("ai.llm.claude", {})
         
         base_url = claude_config.get("base_url", "http://127.0.0.1:8001")
@@ -175,9 +229,9 @@ class AiderLauncher:
     def __init__(self):
         self.config = Config()
 
-    def launch(self):
+    def launch(self, client_config=None):
         """Launch the aider CLI with required environment variables."""
-        api_key = self.config.get("ai.llm.vllm_api_key")
+        api_key = get_vllm_api_key(self.config, keys_path_override=client_config.get("keys") if client_config else None)
         aider_config = self.config.get("ai.llm.aider", {})
         
         model = aider_config.get("model", "google/gemma-4-31B-it")
@@ -208,18 +262,23 @@ class VLLMOrchestrator:
     """Orchestrates the full pipeline from server start to client launch."""
 
     def __init__(self):
-        self.config_path = os.path.expanduser("~/.config/cloudmesh/ai/vllm_servers.yaml")
+        self.config_path = os.path.expanduser("~/.config/cloudmesh/llm.yaml")
         self.db = YamlDB(filename=self.config_path)
 
     def prepare_backend(self, name):
         """Ensure vLLM server is running, tunneled, and healthy."""
-        target_host = get_default_host()
+        # Resolve host from the service name in the config
+        servers = self.db.get("cloudmesh.ai.server", {})
+        target_host = None
+        if isinstance(servers, dict):
+            config = servers.get(name, {})
+            target_host = config.get("host")
+
         if not target_host:
-            raise ValueError("No default host configured. Use 'cme vllm set-host [HOST]' first.")
+            raise ValueError(f"Could not resolve host for service '{name}' in configuration.")
 
         server = get_server(target_host)
-        group = "uva" if ("uva" in target_host.lower() or "rivanna" in target_host.lower()) else "dgx"
-        config = VLLMConfig(self.db, group, name)
+        config = VLLMConfig(self.db, name)
         client = VLLMClient(config)
 
         console.print(banner("Orchestrating vLLM Backend", f"Host: {target_host}\nService: {name}"))
@@ -230,17 +289,23 @@ class VLLMOrchestrator:
             console.ok("vLLM server is already ALIVE and tunneled!")
             return True
 
-        # 2. Try establishing tunnel first (Server might be running, but tunnel is down)
-        console.print("[blue]Establishing SSH tunnel...[/blue]")
-        server.tunnel(name)
+        # 2. Try establishing tunnel first (Skip for localhost)
+        if target_host not in ["localhost", "127.0.0.1"]:
+            console.print("[blue]Establishing SSH tunnel...[/blue]")
+            server.tunnel(name)
+        else:
+            console.print("[blue]Local host detected, skipping SSH tunnel...[/blue]")
         
         if client.is_alive():
-            console.ok("vLLM server is now available via tunnel!")
+            console.ok("vLLM server is now available!")
             return True
 
-        # 3. Start Server (Neither tunnel nor server was available)
-        console.print("[blue]Starting vLLM server on remote host...[/blue]")
-        server.start(name)
+        # 3. Start Server (Skip remote start for localhost)
+        if target_host not in ["localhost", "127.0.0.1"]:
+            console.print("[blue]Starting vLLM server on remote host...[/blue]")
+            server.start(name)
+        else:
+            console.warning("Local host detected. Please ensure the vLLM server is started locally.")
         
         # 4. Final Health Check Poll
         console.print("[blue]Verifying model health...[/blue]")
@@ -277,23 +342,78 @@ def launch_aider():
     launcher = AiderLauncher()
     launcher.launch()
 
-@launch_group.command(name="vllm")
+@launch_group.command(name="llm")
 @click.argument("name")
 @click.option("--ui", is_flag=True, help="Launch WebUI after backend is ready")
 @click.option("--claude", is_flag=True, help="Launch Claude after backend is ready")
-def launch_vllm(name, ui, claude):
+@click.option("--info", is_flag=True, help="Display server configuration info")
+def launch_vllm(name, ui, claude, info):
     """Full pipeline: Start vLLM server -> Tunnel -> Health Check -> Optional UI."""
     try:
+        if info:
+            orchestrator = VLLMOrchestrator()
+            servers = orchestrator.db.get("cloudmesh.ai.server", {})
+            config_path = orchestrator.config_path
+            if isinstance(servers, dict) and name in servers:
+                config = servers[name]
+                info_text = f"Config File: {config_path}\n"
+                info_text += "\n".join([f"{k}: {v}" for k, v in config.items()])
+                console.print(banner(f"Server Info: {name}", info_text))
+            else:
+                available = list(servers.keys()) if isinstance(servers, dict) else []
+                error_msg = (
+                    f"Server '{name}' not found in configuration.\n"
+                    f"Available servers: {', '.join(available) if available else 'None'}"
+                )
+                console.error(error_msg)
+                
+                try:
+                    console.print(banner("Configuration File Location", config_path))
+                    with open(config_path, 'r') as f:
+                        content = f.read()
+                        console.print(banner("Configuration File Contents", content))
+                except Exception as e:
+                    console.error(f"Could not read configuration file: {e}")
+            return
+
         orchestrator = VLLMOrchestrator()
+        
+        # Check if the name refers to a client instead of a server
+        clients = orchestrator.db.get("cloudmesh.ai.client", {})
+        if isinstance(clients, dict) and name in clients:
+            client_config = clients[name]
+            launcher_name = client_config.get("launcher")
+            
+            console.print(banner(f"Launching Client: {name}", f"Host: {client_config.get('host')}\nPort: {client_config.get('port')}\nLauncher: {launcher_name}"))
+            
+            launchers = {
+                "webui": WebUILauncher,
+                "claude": ClaudeLauncher,
+                "aider": AiderLauncher,
+            }
+            
+            launcher_class = launchers.get(launcher_name)
+            if launcher_class:
+                launcher_class().launch(client_config=client_config)
+            else:
+                console.error(f"Unsupported or missing launcher '{launcher_name}' for client '{name}'.")
+            return
+
         if orchestrator.prepare_backend(name):
             console.ok(f"Backend {name} is ready!")
             
             if ui:
                 console.print("[bold green]Launching WebUI...[/bold green]")
-                WebUILauncher().launch()
+                # For the --ui flag, we use the default WebUI config if available
+                clients = orchestrator.db.get("cloudmesh.ai.client", {})
+                webui_cfg = clients.get("openwebui", {}) if isinstance(clients, dict) else {}
+                WebUILauncher().launch(client_config=webui_cfg)
             elif claude:
                 console.print("[bold green]Launching Claude...[/bold green]")
-                ClaudeLauncher().launch()
+                # For the --claude flag, we use the default Claude config if available
+                clients = orchestrator.db.get("cloudmesh.ai.client", {})
+                claude_cfg = clients.get("claude", {}) if isinstance(clients, dict) else {}
+                ClaudeLauncher().launch(client_config=claude_cfg)
             else:
                 console.msg("Backend is ready. You can now run 'cme launch webui' or 'cme launch claude'.")
         else:

@@ -50,7 +50,7 @@ pip install .
 
 ### 1. Server Management (`cmc llm`)
 
-Manage LLM servers on remote hosts using named configurations stored in `~/.config/cloudmesh/llm.yaml`.
+Manage LLM servers on remote hosts using named configurations stored in `~/.config/cloudmesh/ai/vllm_servers.yaml`.
 
 #### Configuration & Setup
 ```bash
@@ -68,6 +68,12 @@ cmc llm reset
 ```bash
 # Start a named server (using default host)
 cmc llm start gemma-4-31b
+
+# Start a server with specific GPU devices
+cmc llm start gemma-4-31b --device 0,1
+
+# Preview the start command without executing
+cmc llm start gemma-4-31b --dryrun
 
 # Start a server by interactively selecting from a table
 cmc llm start --ui
@@ -117,8 +123,8 @@ cmc launch stop webui
 
 ## Configuration
 
-### Unified Configuration (`llm.yaml`)
-Located at `~/.config/cloudmesh/llm.yaml`. This file contains both the server definitions and the user's default settings.
+### Unified Configuration (`vllm_servers.yaml`)
+Located at `~/.config/cloudmesh/ai/vllm_servers.yaml`. This file contains both the server definitions and the user's default settings.
 
 Example Configuration:
 ```yaml
