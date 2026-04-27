@@ -4,6 +4,7 @@ import os
 from cloudmesh.ai.vllm.config import VLLMConfig
 from cloudmesh.ai.vllm.start_script import VLLMStartScript
 from cloudmesh.ai.vllm.batch_job import VLLMBatchJob
+from cloudmesh.ai.vllm.tunnel import tunnel_manager
 
 class ServerUVA(Server):
     """
@@ -123,11 +124,11 @@ class ServerUVA(Server):
         config = self._get_config(name)
         port = config.get('port', '8000')
         
-        # This command is run locally, not remotely
-        import subprocess
-        tunnel_cmd = ["ssh", "-L", f"{port}:localhost:{port}", self.host, "-N"]
-        subprocess.Popen(tunnel_cmd)
-        self.logger.info(f"Tunnel created: localhost:{port} -> {self.host}:{port}")
+        success, result = tunnel_manager.start_tunnel(self.host, port)
+        if success:
+            self.logger.info(f"Tunnel created: localhost:{port} -> {self.host}:{port} (PID: {result})")
+        else:
+            self.logger.warning(f"Tunnel not created: {result}")
 
     def get_logs(self, name: str) -> str:
         """

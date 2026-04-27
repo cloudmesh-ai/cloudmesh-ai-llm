@@ -7,28 +7,28 @@ server containers on DGX and UVA hosts using named configurations.
 
 Usage Examples:
 -------------------------------------------------------------------------------
-1. Set a default service:
-   $ cmc llm default uva-default
+1. Set a default server:
+   $ cmc llm default server uva-default
 
-3. Start an LLM server using interactive UI:
+2. Start an LLM server using interactive UI:
    $ cmc llm start --ui
 
-4. Start an LLM server from a named config:
+3. Start an LLM server from a named config:
    $ cmc llm start uva-default --tunnel
 
-5. Check the status of a server:
+4. Check the status of a server:
    $ cmc llm status uva-default
 
-6. View the last 100 lines of logs:
+5. View the last 100 lines of logs:
    $ cmc llm logs uva-default
 
-7. Stop a server gracefully:
+6. Stop a server gracefully:
    $ cmc llm stop uva-default --tunnel
 
-8. Forcefully kill a server:
+7. Forcefully kill a server:
    $ cmc llm kill uva-default --tunnel
 
-9. Send a prompt to the running server:
+8. Send a prompt to the running server:
    $ cmc llm prompt "What is the capital of France?"
 -------------------------------------------------------------------------------
 
@@ -38,10 +38,11 @@ Usage:
     llm kill [NAME] [--tunnel]
     llm status [NAME]
     llm logs [NAME]
-    llm default [NAME]
+    llm default server [NAME]
+    llm default client [NAME]
+    llm tunnel stop [NAME]
     llm configure
     llm prompt [text] [--file <file>]
-    add 
 """
 
 import click
@@ -53,11 +54,12 @@ from cloudmesh.ai.common.io import console
 from textual.app import App, ComposeResult
 from textual.widgets import DataTable, Header, Footer
 from yamldb import YamlDB
-from cloudmesh.ai.common import banner
 from cloudmesh.ai.common.remote import RemoteExecutor
 from cloudmesh.ai.vllm.server_uva import ServerUVA
 from cloudmesh.ai.vllm.server_dgx import ServerDGX
 from cloudmesh.ai.vllm.batch_job import VLLMBatchJob
+from cloudmesh.ai.vllm.tunnel import tunnel_manager
+from cloudmesh.ai.vllm.exceptions import VLLMError, VLLMConnectionError, VLLMConfigError, VLLMRuntimeError
 from cloudmesh.ai.vllm.config import VLLMConfig
 from cloudmesh.ai.vllm.client import VLLMClient
 from cloudmesh.ai.vllm.ijob import IJob
@@ -71,13 +73,20 @@ def get_default_host(db=None):
     
     # 1. Get the default server name
     default_server_name = db.get("cloudmesh.ai.default.server")
-    if default_server_name:
-        # 2. Resolve the host for that server
-        servers = db.get("cloudmesh.ai.server", {})
-        if isinstance(servers, dict):
-            host = servers.get(default_server_name, {}).get("host")
-            if host:
-                return host
+    
+    # 2. Get all configured servers
+    servers = db.get("cloudmesh.ai.server", {})
+    if not isinstance(servers, dict) or not servers:
+        return None
+
+    # 3. If no explicit default is set, use the first server in the list
+    if not default_server_name:
+        default_server_name = next(iter(servers))
+    
+    # 4. Resolve the host for the determined server
+    host = servers.get(default_server_name, {}).get("host")
+    if host:
+        return host
     
     return None
 
@@ -209,7 +218,7 @@ def start(name, tunnel, ui, sbatch):
         if config:
             details_content += f"Model: {config.get('model')}\nImage: {config.get('image')}\nPort: {config.get('port', '8000')}\n"
         
-        console.print(banner(f"Start vLLM Server: {name}", details_content))
+        console.banner(f"Start vLLM Server: {name}", details_content)
         
         # Banner 2: Execution Plan
         ijob_helper = IJob(db).get(group, name)
@@ -233,17 +242,17 @@ def start(name, tunnel, ui, sbatch):
             f"Step 3. Execution mode: {exec_mode}\n"
             f"Step 4. Remote command: {exec_cmd_display} {script_path}"
         )
-        console.print(banner("Execution Plan", execution_plan))
+        console.banner("Execution Plan", execution_plan)
 
         # Detailed Step Panels (indented)
         step1_cmd = f"mkdir -p {working_dir}"
         step2_cmd = f"Write content to {script_path}"
         step4_cmd = f"{exec_cmd_display} {script_path}"
 
-        console.print(Padding(banner('Step 1: Create directory', step1_cmd), (0, 0, 0, 4)))
-        console.print(Padding(banner('Step 2: Upload script', step2_cmd), (0, 0, 0, 4)))
-        console.print(Padding(banner('Step 3: Execution mode', exec_mode), (0, 0, 0, 4)))
-        console.print(Padding(banner('Step 4: Execute remote command', step4_cmd), (0, 0, 0, 4)))
+        console.banner('Step 1: Create directory', step1_cmd, padding=(0, 0, 0, 4))
+        console.banner('Step 2: Upload script', step2_cmd, padding=(0, 0, 0, 4))
+        console.banner('Step 3: Execution mode', exec_mode, padding=(0, 0, 0, 4))
+        console.banner('Step 4: Execute remote command', step4_cmd, padding=(0, 0, 0, 4))
 
         if exec_mode == "ijob" and group == "uva":
             # Print ijob details in a banner
@@ -254,13 +263,13 @@ def start(name, tunnel, ui, sbatch):
                 f"GRES: {config.get('gres', 'gpu:1')}\n"
                 f"Reservation: {config.get('reservation') or 'None'}"
             )
-            console.print(banner("ijob Parameters", ijob_details))
+            console.banner("ijob Parameters", ijob_details)
 
             # Print the exact ijob command in a banner
-            console.print(banner("ijob Command", f"{exec_cmd_display} {script_path}"))
+            console.banner("ijob Command", f"{exec_cmd_display} {script_path}")
         
         # Banner 3: Command to be executed
-        console.print(banner("Command to be executed", start_cmd))
+        console.banner("Command to be executed", start_cmd)
 
         raw_sequence = (
             f"RemoteExecutor.execute('mkdir -p {working_dir}')\n"
@@ -312,7 +321,17 @@ def stop(name, tunnel):
         server.stop(name)
         
         if tunnel:
-            console.msg(f"Closing tunnel for {name}...")
+            # Use TunnelManager to stop the tunnel
+            config_path = os.path.expanduser("~/.config/cloudmesh/llm.yaml")
+            db = YamlDB(filename=config_path)
+            server_config = db.get(f"cloudmesh.ai.server.{name}", {})
+            port = server_config.get('port', '8000')
+            
+            success, result = tunnel_manager.stop_tunnel(target_host, port)
+            if success:
+                console.ok(f"Tunnel closed (PID: {result})")
+            else:
+                console.warning(f"Could not close tunnel: {result}")
             
         console.ok(f"Successfully stopped vLLM server '{name}' on {target_host}")
     except Exception as e:
@@ -340,7 +359,17 @@ def kill(name, tunnel):
         server.kill(name)
         
         if tunnel:
-            console.msg(f"Closing tunnel for {name}...")
+            # Use TunnelManager to stop the tunnel
+            config_path = os.path.expanduser("~/.config/cloudmesh/llm.yaml")
+            db = YamlDB(filename=config_path)
+            server_config = db.get(f"cloudmesh.ai.server.{name}", {})
+            port = server_config.get('port', '8000')
+            
+            success, result = tunnel_manager.stop_tunnel(target_host, port)
+            if success:
+                console.ok(f"Tunnel closed (PID: {result})")
+            else:
+                console.warning(f"Could not close tunnel: {result}")
             
         console.ok(f"Successfully killed vLLM server '{name}' on {target_host}")
     except Exception as e:
@@ -368,8 +397,7 @@ def status(name):
         config = VLLMConfig(db, group, name)
         client = VLLMClient(config)
         
-        alive = client.is_alive()
-        status_text = "ALIVE" if alive else "DEAD"
+        status_text = client.get_status()
         
         # Check for tunnel (simplified check: is localhost:port reachable?)
         tunnel_status = "Unknown"
@@ -425,19 +453,49 @@ def info():
             f"Config File: {config_path}\n"
             f"Default Server: [bold]{default_server or 'Not set'}[/bold]"
         )
-        console.print(banner("vLLM Configuration Info", info_content))
+        console.banner("vLLM Configuration Info", info_content)
         
     except Exception as e:
         console.error(f"Error retrieving configuration info: {e}")
 
+@llm_group.command(name="tunnel")
+def tunnel_group():
+    """Tunnel management commands."""
+    pass
+
+@tunnel_group.command(name="stop")
+@click.argument("name")
+def stop_tunnel(name):
+    """Stop the SSH tunnel for a specific server."""
+    try:
+        config_path = os.path.expanduser("~/.config/cloudmesh/llm.yaml")
+        db = YamlDB(filename=config_path)
+        server_config = db.get(f"cloudmesh.ai.server.{name}", {})
+        if not server_config:
+            raise VLLMConfigError(f"Server '{name}' not found in configuration.")
+        
+        host = server_config.get("host")
+        port = server_config.get("port", "8000")
+        if not host:
+            raise VLLMConfigError(f"Host not specified for server '{name}'.")
+            
+        success, result = tunnel_manager.stop_tunnel(host, port)
+        if success:
+            console.ok(f"Tunnel for {name} stopped (PID: {result})")
+        else:
+            console.error(result)
+    except VLLMError as e:
+        console.error(str(e))
+    except Exception as e:
+        console.error(f"Unexpected error stopping tunnel: {e}")
+
+llm_group.add_command(tunnel_group, name="tunnel")
+
 @llm_group.command(name="default")
-@click.argument("type")
+@click.argument("type", type=click.Choice(['server', 'client'], case_sensitive=False))
 @click.argument("name")
 def set_default(type, name):
     """Set the default server or client. Usage: cmc llm default [server|client] [NAME]"""
-    if type not in ["server", "client"]:
-        console.error("Invalid type. Use 'server' or 'client'.")
-        return
     try:
         config_path = os.path.expanduser("~/.config/cloudmesh/llm.yaml")
         db = YamlDB(filename=config_path)
@@ -457,7 +515,7 @@ def configure():
         # 2. Current state
         current_server = db.get("cloudmesh.ai.default.server")
         
-        console.print(banner("vLLM Configuration", f"Config File: {config_path}\nCurrent Default Server: [bold]{current_server or 'Not set'}[/bold]"))
+        console.banner("vLLM Configuration", f"Config File: {config_path}\nCurrent Default Server: [bold]{current_server or 'Not set'}[/bold]")
         
         # 3. List available servers from server config
         servers = db.get("cloudmesh.ai.server", {})
@@ -498,9 +556,9 @@ def init():
 
     if VLLMConfig.reset():
         console.ok("vLLM server configurations initialized successfully!")
-        console.print(banner("Welcome to vLLM Management", 
+        console.banner("Welcome to vLLM Management", 
             "Default configurations for DGX and UVA have been added to your config.\n"
-            "You can now use 'cmc llm start [NAME]' to launch a server."))
+            "You can now use 'cmc llm start [NAME]' to launch a server.")
     else:
         console.error("Error: Could not find default configuration file to initialize from.")
 

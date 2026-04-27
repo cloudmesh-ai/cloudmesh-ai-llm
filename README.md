@@ -54,10 +54,7 @@ Manage LLM servers on remote hosts using named configurations stored in `~/.conf
 
 #### Configuration & Setup
 ```bash
-# Interactively configure default host and settings
-cmc llm configure
-
-# Set the default server
+# Set the default server (used as fallback if no host is specified)
 cmc llm default server gemma-4-31b
 
 # Set the default client
@@ -130,7 +127,7 @@ cloudmesh:
     default:
       server: gemma-4-31b
       client: default-client
-    servers:
+    server:
       gemma-4-31b:
         host: dgx-node-1
         account: "bii_dsc_community"

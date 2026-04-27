@@ -2,6 +2,28 @@
 
 All notable changes to `cloudmesh-ai-llm` will be documented in this file.
 
+## [7.0.4.dev1] - 2026-04-26
+
+### Added
+- **Robust Error Handling**: Implemented a custom exception hierarchy for vLLM operations to provide clearer failure diagnostics.
+- **Advanced Tunnel Management**: Added PID tracking and automatic cleanup for SSH tunnels to prevent orphaned processes.
+- **Deep Health Checks**: Enhanced server status monitoring with a multi-stage state machine: `Offline` $\rightarrow$ `Starting` $\rightarrow$ `Ready`.
+- **Dynamic Defaulting**: Implemented a first-in-list fallback mechanism for server selection when no specific host is provided.
+- **Expanded Test Suite**: Added comprehensive integration tests for the improved launch and tunnel lifecycles.
+
+### Changed
+- **Configuration Schema**:
+    - Removed `default_host` and `default_service` from `VLLMConfig` in favor of dynamic defaulting.
+    - Changed YAML configuration keys from plural `servers` to singular `server` for consistency.
+- **Project Renaming**: Renamed project and command group from `vllm` to `llm` for broader applicability.
+- **Command Interface**:
+    - Removed `cmc llm set-host`.
+    - Updated `cmc llm default` to support specific types: `cmc llm default server [NAME]` and `cmc llm default client [NAME]`.
+- **Documentation**: Updated `README.md` to reflect the new command set and configuration format.
+
+### Security
+- **History Purge**: Permanently removed sensitive deployment scripts and local configuration directories (`dgx/`, `donttouch/`, `start-claude-4.sh`) from the git history.
+
 ## [7.0.3.dev1] - 2026-04-26
 
 ### Changed

@@ -9,20 +9,32 @@ class VLLMClient:
         self.port = config.get("port")
         self.api_url = f"http://{self.host}:{self.port}/health"
 
-    def is_alive(self):
-        """Check if the vLLM server is responding to health checks."""
+    def get_status(self):
+        """
+        Check the vLLM server status.
+        Returns: 'OFFLINE', 'STARTING', or 'READY'.
+        """
         try:
-            # Check basic health endpoint
+            # 1. Check basic health endpoint
             response = requests.get(self.api_url, timeout=5)
             if response.status_code != 200:
-                return False
+                return "STARTING"
             
-            # Also verify that the model API is responsive
+            # 2. Verify that the model API is responsive
             models_url = f"http://{self.host}:{self.port}/v1/models"
             models_response = requests.get(models_url, timeout=5)
-            return models_response.status_code == 200
+            if models_response.status_code == 200:
+                return "READY"
+            
+            return "STARTING"
+        except requests.exceptions.ConnectionError:
+            return "OFFLINE"
         except Exception:
-            return False
+            return "OFFLINE"
+
+    def is_alive(self):
+        """Backward compatibility: check if the server is READY."""
+        return self.get_status() == "READY"
 
     def get_logs(self, lines=100):
         """Retrieve the last N lines of logs from the remote server."""
