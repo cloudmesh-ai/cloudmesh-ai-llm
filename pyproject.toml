@@ -7,7 +7,7 @@ name = "cloudmesh-ai-llm"
 
 dynamic = ["version"]
 description = "Extension vllm created by CME"
-license = "Apache-2.0"
+license = {text = "Apache-2.0"}
 dependencies = [
     "click",
     "rich",
