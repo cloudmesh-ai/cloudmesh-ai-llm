@@ -104,69 +104,147 @@ cmc llm prompt --file my_complex_prompt.txt
 
 The `launch` group provides high-level workflows to get AI tools running.
 
+Full pipeline: Start -> Tunnel -> Health Check -> WebUI
 ```bash
-# Full pipeline: Start -> Tunnel -> Health Check -> WebUI
 cmc launch llm gemma-4-31b --ui
+```
 
-# Full pipeline: Start -> Tunnel -> Health Check -> Claude
+Full pipeline: Start -> Tunnel -> Health Check -> Claude
+```
 cmc launch llm gemma-4-31b --claude
+```
 
-# Launch only the WebUI (assumes backend is already ready)
+Launch only the WebUI (assumes backend is already ready)
+```
 cmc launch webui
+```
 
-# Launch only Claude (assumes backend is already ready)
+Launch only Claude (assumes backend is already ready)
+```
 cmc launch claude
+```
 
-# Install AI tools (e.g., aider)
-# Note: Aider requires Python 3.10-3.12
+
+Install AI tools (e.g., aider)
+(this is no longer needed as we switchedt to docker, so aider is installed in a container)
+```
 cmc launch install aider
+```
 
-# Stop a launched tool
+Stop a launched tool
+```
 cmc launch stop webui
+```
 
 ## AI Clients
 
-The `launch` command supports several AI clients that can connect to your vLLM backend.
+The `launch` command supports several AI clients that can connect to your vLLM backend. These tools allow you to interact with your models via a web browser, a terminal, or an agentic coding environment.
 
 ### 1. Open WebUI
-A full-featured web interface for interacting with your LLMs.
+Open WebUI is a self-hosted, extensible web interface that provides a ChatGPT-like experience for your local or remote LLMs.
+
 - **Setup**: No local installation required. The launcher automatically manages a Docker container.
+- **Usage & Cost**: Because you are hosting the UI and the backend (vLLM) yourself, **there are no per-token charges**. 
+- **Account Creation**: When you first launch the UI and navigate to the URL, you will be prompted to create an account. **The first account created becomes the Administrator** of the local instance.
 - **Configuration**: Defined under `cloudmesh.ai.client.openwebui` in `llm.yaml`.
-  - `OPENAI_API_KEY`: Your server master key.
-  - `OPENAI_API_BASE`: The API endpoint (e.g., `http://localhost:8001/v1`).
-  - `port`: The local port to expose the UI (default: `3000`).
+
+**Example YAML:**
+```yaml
+cloudmesh:
+  ai:
+    client:
+      openwebui:
+        OPENAI_API_KEY: "{SERVER_MASTER_KEY}"
+        OPENAI_API_BASE: "http://localhost:8001/v1"
+        port: 3000
+```
 - **Run**: `cmc launch webui`
 
 ### 2. Claude Code
-Anthropic's official CLI tool for agentic coding.
+Claude Code is an agentic CLI tool from Anthropic that can read your files, run commands, and write code directly in your repository.
+
 - **Setup**: Requires local installation via npm:
   ```bash
   npm install -g @anthropic-ai/claude-code
   ```
-- **Configuration**: Defined under `cloudmesh.ai.client.claude` in `llm.yaml`.
-  - `OPENAI_API_KEY`: Your server master key.
-  - `OPENAI_API_BASE`: The API endpoint.
-  - `ANTHROPIC_MODEL`: The model name (e.g., `google/gemma-4-31B-it`).
-  - `ANTHROPIC_AUTH_TOKEN`: Optional override for the API key.
-  - `CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS`: Set to `1` to disable betas.
+- **Configuration**: Defined under `cloudmesh.ai.client.claude` in `llm.yaml`. It uses specific environment variables to redirect Claude's requests to your vLLM server.
+
+**Example YAML:**
+```yaml
+cloudmesh:
+  ai:
+    client:
+      claude:
+        OPENAI_API_KEY: "{SERVER_MASTER_KEY}"
+        OPENAI_API_BASE: "http://localhost:8001/v1"
+        ANTHROPIC_MODEL: "google/gemma-4-31B-it"
+        ANTHROPIC_DEFAULT_HAIKU_MODEL: "google/gemma-4-31B-it"
+        ANTHROPIC_DEFAULT_SONNET_MODEL: "google/gemma-4-31B-it"
+        CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS: 1
+        CLAUDE_CODE_ATTRIBUTION_HEADER: 0
+```
 - **Run**: `cmc launch claude`
 
 ### 3. Aider
-An AI pair programming tool that works directly in your terminal and git repo.
-- **Setup**: Handled automatically by the launcher via Docker.
+Aider is an AI pair programming tool that allows you to edit code in your local git repository using an LLM. It is highly efficient at making targeted changes across multiple files.
+
+- **Setup**: Handled automatically by the launcher via Docker to ensure a consistent environment.
 - **Configuration**: Defined under `cloudmesh.ai.client.aider` in `llm.yaml`.
-  - `OPENAI_API_KEY`: Your server master key.
-  - `OPENAI_API_BASE`: The API endpoint.
-  - `model`: The model name.
-- **Run**: `cmc launch aider --docker`
+
+**Example YAML:**
+```yaml
+cloudmesh:
+  ai:
+    client:
+      aider:
+        OPENAI_API_KEY: "{SERVER_MASTER_KEY}"
+        OPENAI_API_BASE: "http://localhost:8001/v1"
+        model: "google/gemma-4-31B-it"
 ```
+- **Run**: `cmc launch aider --docker`
+
+
+## Key Management & Security
+
+To keep your configuration flexible and secure, `cloudmesh-ai-llm` supports separating your architectural configuration from your sensitive secrets.
+
+### Why Separate Keys?
+It is a best practice to keep API keys, passwords, and tokens in a separate file (e.g., `keys.yaml`) rather than directly in `llm.yaml`. This allows you to:
+- **Share Configurations**: You can share your `llm.yaml` with colleagues to help them set up their environment without sharing your private keys.
+- **Version Control**: You can safely commit `llm.yaml` to a git repository while keeping `keys.yaml` in your `.gitignore`.
+- **Centralized Secrets**: Manage all your AI keys in one place for multiple different tools.
+
+### The `#load` Directive
+At the top of your `llm.yaml` file, you can use the `#load` directive to import external files:
+
+```yaml
+#load: /Users/grey/.config/cloudmesh/keys.yaml
+cloudmesh:
+  ai:
+    ...
+```
+
+The launcher reads this directive and merges the contents of the specified file into the in-memory configuration.
+
+### Variable Substitution
+Once a file is loaded, you can reference its values using the `{VARIABLE_NAME}` syntax. For example, if your `keys.yaml` contains:
+```yaml
+SERVER_MASTER_KEY: "sk-1234567890abcdef"
+```
+You can use it in `llm.yaml` like this:
+```yaml
+OPENAI_API_KEY: "{SERVER_MASTER_KEY}"
+```
+The system automatically resolves these placeholders at runtime, ensuring your secrets remain encrypted or isolated in their own secure files.
 
 ## Configuration
 
 ### Unified Configuration (`vllm_servers.yaml`)
+
 Located at `~/.config/cloudmesh/ai/vllm_servers.yaml`. This file contains both the server definitions and the user's default settings.
 
 Example Configuration:
+
 ```yaml
 cloudmesh:
   ai:
@@ -192,6 +270,7 @@ cloudmesh:
 ## Technical Details
 
 ### API Endpoint
+
 By default, the server exposes an OpenAI-compatible API at: `http://127.0.0.1:8000/v1` (via SSH tunnel).
 
 ### Remote Execution
