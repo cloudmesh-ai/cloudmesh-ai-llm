@@ -26,8 +26,8 @@ cloudmesh:
       gemma-uva:
         platform: uva
         host: uva
-        user: "{~/.ssh/config:uva.user}" # Optional: resolves from ~/.ssh/config (also supports {~/.ssh.config.uva.user})
-        dir: "/scratch/{user}/custom/vllm" # Optional: {user} is replaced at runtime. Defaults to /scratch/${USER}/cloudmesh/vllm
+        user: "{~/.ssh/config:uva.user}" # Optional: resolves from ~/.ssh/config
+        dir: "/scratch/{user}/cloudmesh/vllm/{port}" # Optional: {user} and {port} are replaced at runtime. Defaults to /scratch/${USER}/cloudmesh/vllm_{port}
         local_port: 18123
         remote_port: 18123
         model: "google/gemma-4-31B-it"
@@ -43,8 +43,8 @@ cloudmesh:
       gemma-dgx:
         platform: dgx
         host: dgx
-        user: "{~/.ssh/config:dgx.user}" # Optional: resolves from ~/.ssh/config (also supports {~/.ssh.config.dgx.user})
-        dir: "/raid/{user}/custom/vllm" # Optional: {user} is replaced at runtime. Defaults to /raid/${USER}/cloudmesh/vllm
+        user: "{~/.ssh/config:dgx.user}" # Optional: resolves from ~/.ssh/config
+        dir: "/raid/{user}/cloudmesh/vllm/{port}" # Optional: {user} and {port} are replaced at runtime. Defaults to /raid/${USER}/cloudmesh/vllm_{port}
         local_port: 8000
         remote_port: 8000
         model: "google/gemma-4-31B-it"
@@ -110,3 +110,40 @@ cmc launch llm gemma-uva
 | `cmc launch llm <name> --ui` | Launches the backend and then automatically starts the Open WebUI. |
 | `cmc launch llm <name> --claude` | Launches the backend and then starts Claude Code. |
 | `cmc launch config info` | Displays the resolved in-memory configuration. |
+
+---
+
+## Appendix: Manual Command Line Workflow
+
+If you want to launch a model on a specific port (e.g., `18124`) without modifying your permanent configuration file, follow these steps:
+
+### 1. Initialize Configuration
+Initialize the server configuration in your `llm.yaml` file using a host from your SSH config (e.g., `uva` or `dgx`):
+```bash
+cmc launch init server uva
+```
+
+You can verify the configuration was added correctly by viewing the file:
+```bash
+cat ~/.config/cloudmesh/llm.yaml
+```
+
+### 2. Launch with Port Override
+Run the launch command with the `--port` flag. This will override both the local and remote ports to `18124` and create a unique remote directory for this instance.
+```bash
+cmc launch llm gemma-uva --port 18124
+```
+
+### 3. What happens under the hood:
+- **Allocation**: The orchestrator requests a GPU node via `ijob`.
+- **Deployment**: It creates a directory like `/scratch/{user}/cloudmesh/vllm_18124` on the allocated node.
+- **Execution**: It starts the vLLM server on remote port `18124`.
+- **Health Check**: It polls the remote node until port `18124` is open.
+- **Tunneling**: It establishes a background SSH tunnel: `localhost:18124` $\rightarrow$ `node:18124`.
+
+### 4. Verify and Connect
+Once the command reports "Backend is ready!", you can verify the tunnel is active:
+```bash
+curl http://localhost:18124/v1/models
+```
+You can then point your UI or Claude Code to `http://localhost:18124/v1`.
