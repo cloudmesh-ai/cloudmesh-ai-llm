@@ -12,6 +12,8 @@ import os
 import yaml
 from pathlib import Path
 from rich.console import Console
+from cloudmesh.ai.vpn.vpn import Vpn
+from cloudmesh.ai.command.launch import AiderLauncher
 
 console = Console()
 
@@ -34,10 +36,111 @@ def gemma_group():
     pass
 
 @gemma_group.command(name="start")
-@click.option("--platform", default="dgx", type=click.Choice(["dgx", "mac"]), help="Platform to start on.")
+@click.option("--platform", default="dgx", type=click.Choice(["dgx", "mac", "uva"]), help="Platform to start on.")
 def start_cmd(platform):
     """Start Gemma services."""
-    script = "start.sh" if platform == "dgx" else "gui.sh" # Assuming mac start is gui
+    if platform == "dgx":
+        console.print("[blue]Checking VPN connection for DGX...[/blue]")
+        vpn = Vpn()
+        if not vpn.enabled():
+            console.msg("VPN is disconnected. Attempting to connect...")
+            if not vpn.connect():
+                console.error("VPN connection failed. Please connect to the VPN and try again.")
+                return
+            console.ok("VPN connected successfully!")
+        else:
+            console.ok("VPN is already active.")
+        
+        script = "start.sh"
+        run_script(script, platform)
+        return
+
+    if platform == "uva":
+        console.print("[blue]Starting UVA HPC Orchestration...[/blue]")
+        
+        # 1. VPN Connection
+        vpn = Vpn()
+        if not vpn.enabled():
+            console.msg("VPN is disconnected. Attempting to connect...")
+            if not vpn.connect():
+                console.error("VPN connection failed. Please connect to the VPN and try again.")
+                return
+            console.ok("VPN connected successfully!")
+        else:
+            console.ok("VPN is already active.")
+
+        # 2. Resource Allocation (ijob)
+        console.print("[blue]Requesting GPU allocation via ijob...[/blue]")
+        ijob_cmd = [
+            "ijob", 
+            "--partition=bii-gpu", 
+            "--reservation=bi_fox_dgx", 
+            "--account=bi_dsc_community", 
+            "--gpus=a100:4", 
+            "--cpus-per-task=32", 
+            "--mem=96gb", 
+            "--time=03:00:00"
+        ]
+        
+        try:
+            # We use shell=True or a wrapper because ijob might be a shell alias/function
+            result = subprocess.run(" ".join(ijob_cmd), shell=True, capture_output=True, text=True, check=True)
+            output = result.stdout + result.stderr
+            
+            # Parse node name (e.g., "Nodes udc-an26-1 are ready")
+            import re
+            match = re.search(r"Nodes\s+([a-zA-Z0-9-]+)\s+are ready", output)
+            if not match:
+                console.error(f"Could not find allocated node in ijob output:\n{output}")
+                return
+            
+            node_name = match.group(1)
+            console.ok(f"Allocated node: {node_name}")
+            
+            # 3. Dynamic SSH Tunnel
+            # Local port 18123 -> Node port 18123
+            console.print(f"[blue]Establishing dynamic tunnel to {node_name}...[/blue]")
+            tunnel_cmd = f"ssh -L 18123:{node_name}:18123 uva -N"
+            subprocess.Popen(tunnel_cmd, shell=True)
+            console.ok("Tunnel established in background.")
+            
+            # 4. Remote Launch
+            console.print("[blue]Launching vLLM on allocated node...[/blue]")
+            
+            # Get keys from environment or config
+            hf_token = os.environ.get("HF_TOKEN", "TBD")
+            vllm_key = os.environ.get("VLLM_API_KEY", "TBD")
+            
+            remote_cmd = (
+                f"cd /scratch/{os.environ.get('USER', 'user')} && "
+                f"module load apptainer && "
+                f"apptainer run --nv "
+                f"-B /scratch/{os.environ.get('USER', 'user')}/hf_cache:/root/.cache/huggingface "
+                f"--env HF_TOKEN='{hf_token}' "
+                f"--env VLLM_API_KEY='{vllm_key}' "
+                f"vllm_gemma4.sif "
+                f"--model google/gemma-4-31B-it "
+                f"--tensor-parallel-size 4 "
+                f"--gpu-memory-utilization 0.85 "
+                f"--max-model-len 131072 "
+                f"--enable-prefix-caching "
+                f"--load-format safetensors "
+                f"--tool-call-parser gemma4 "
+                f"--host 0.0.0.0 "
+                f"--port 18123"
+            )
+            
+            # Execute on the allocated node
+            subprocess.run(f"ssh {node_name} '{remote_cmd}'", shell=True)
+            
+        except subprocess.CalledProcessError as e:
+            console.error(f"HPC Orchestration failed: {e}")
+            return
+
+        return
+
+    # Default to mac/gui
+    script = "gui.sh"
     run_script(script, platform)
 
 @gemma_group.command(name="gui")
@@ -94,18 +197,19 @@ def ascii_cmd():
         # Read key and strip whitespace/newlines
         api_key = key_path.read_text().strip()
         
-        # Set environment variables
-        env = os.environ.copy()
-        env["OPENAI_API_BASE"] = url
-        env["OPENAI_API_KEY"] = api_key
-        env["AIDER_MODEL"] = model
+        # Prepare config for AiderLauncher
+        # AiderLauncher expects keys like OPENAI_API_KEY and OPENAI_API_BASE
+        launcher_config = {
+            "model": model,
+            "OPENAI_API_KEY": api_key,
+            "OPENAI_API_BASE": url,
+        }
         
-        # Launch aider
-        subprocess.run(["aider", "--model", model], env=env, check=True)
+        # Use the robust AiderLauncher from cloudmesh-ai-llm
+        AiderLauncher().launch(client_config=launcher_config)
+        
     except yaml.YAMLError as e:
         console.print(f"[bold red]Error parsing aider.yaml:[/bold red] {e}")
-    except subprocess.CalledProcessError as e:
-        console.print(f"[bold red]Error launching aider:[/bold red] {e}")
     except Exception as e:
         console.print(f"[bold red]An unexpected error occurred:[/bold red] {e}")
 
