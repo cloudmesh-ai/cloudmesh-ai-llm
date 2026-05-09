@@ -275,3 +275,7 @@ By default, the server exposes an OpenAI-compatible API at: `http://127.0.0.1:80
 
 ### Remote Execution
 The extension uses a unified `RemoteExecutor` to handle SSH and SFTP operations, ensuring consistent behavior across DGX and UVA environments.
+## Core Dependencies
+This project depends on the following core components of the Cloudmesh AI ecosystem:
+- [cloudmesh-ai-common](https://github.com/cloudmesh-ai/cloudmesh-ai-common)
+- [cloudmesh-ai-cmc](https://github.com/cloudmesh-ai/cloudmesh-ai-cmc)
