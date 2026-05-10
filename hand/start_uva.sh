@@ -13,7 +13,7 @@ apptainer run --nv \
   -B /scratch/${USER}/hf_cache:/root/.cache/huggingface \
   --env HF_TOKEN="${HF_TOKEN}" \
   --env VLLM_API_KEY="${VLLM_API_KEY}" \
-  ${VLLM_IMAGE:-vllm_gemma4.sif} \
+  ${VLLM_IMAGE:-/scratch/${USER}/vllm_gemma4.sif} \
   --model google/gemma-4-31B-it \
   --tensor-parallel-size 4 \
   --gpu-memory-utilization 0.85 \

@@ -185,6 +185,7 @@ class VLLMOrchestrator:
 
     def launch_uva(self, server_name: str, port_override: int = None):
         """UVA HPC specific launch: Deployment -> ijob -> Tunnel -> Apptainer."""
+        console.print("[bold red]DEBUG: Executing updated launch_uva logic...[/bold red]")
         servers = self.db.get("cloudmesh.ai.server", {})
         config = servers.get(server_name, {})
         
@@ -199,7 +200,7 @@ class VLLMOrchestrator:
             remote_user = self._get_remote_user("uva")
             
         remote_port = port_override or config.get("remote_port", 8000)
-        remote_dir = config.get("dir", f"/scratch/{remote_user}/cloudmesh/vllm_{remote_port}")
+        remote_dir = config.get("dir", f"/scratch/{remote_user}/cloudmesh/llm_{remote_port}")
         if remote_dir:
             if "{user}" in remote_dir:
                 remote_dir = remote_dir.replace("{user}", remote_user)
@@ -209,19 +210,23 @@ class VLLMOrchestrator:
         try:
             # 1. Deployment (MUST happen before ijob)
             script_name = "start_uva.sh"
-            local_script = Path(".").joinpath(script_name)
-            if not local_script.exists():
-                shutil.copy(self.template_dir / script_name, local_script)
+            script_path = self.template_dir / script_name
             
-            console.print(f"[blue]Deploying {script_name} to uva:{remote_dir}...[/blue]")
+            console.print(f"[blue]Deploying {script_name} from template to uva:{remote_dir}/{script_name}...[/blue]")
             subprocess.run(f"ssh uva 'mkdir -p {remote_dir}'", shell=True, check=True)
-            subprocess.run(f"scp {local_script} uva:{remote_dir}/{script_name}", shell=True, check=True)
+            # Use absolute path for scp to avoid any ambiguity
+            scp_cmd = f"scp {script_path} uva:{remote_dir}/{script_name}"
+            console.print(f"[dim]Executing: {scp_cmd}[/dim]")
+            subprocess.run(scp_cmd, shell=True, check=True)
+            console.ok(f"Successfully uploaded {script_name} to {remote_dir}")
 
             # 2. Allocation
             console.print("[blue]Requesting GPU allocation via sbatch...[/blue]")
             
             # Resolve image path: from config or default to /scratch/{user}/vllm_gemma4.sif
-            vllm_image = config.get("image") or f"/scratch/{remote_user}/vllm_gemma4.sif"
+            vllm_image = config.get("image")
+            if not vllm_image or not vllm_image.startswith("/"):
+                vllm_image = f"/scratch/{remote_user}/{vllm_image or 'vllm_gemma4.sif'}"
 
             sbatch_script = f"""#!/bin/bash
 #SBATCH --partition=bii-gpu
@@ -374,7 +379,7 @@ PORT={remote_port} VLLM_IMAGE="{vllm_image}" bash {script_name}
             
             # Resolve remote_dir for log checking
             remote_user = config.get("user") or self._get_remote_user(target_host)
-            remote_dir = config.get("dir", f"/scratch/{remote_user}/cloudmesh/vllm_{remote_port}")
+            remote_dir = config.get("dir", f"/scratch/{remote_user}")
             if remote_dir:
                 remote_dir = remote_dir.replace("{user}", remote_user).replace("{port}", str(remote_port))
 
