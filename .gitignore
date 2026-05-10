@@ -47,3 +47,7 @@ Thumbs.db
 # Logs and Databases
 *.log
 *.sqlite3
+
+# Tool Artifacts
+.aider.chat.history.md
+.aider.input.history

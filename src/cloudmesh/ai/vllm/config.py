@@ -28,10 +28,12 @@ class VLLMConfig:
     def reset():
         """Initialize the combined vLLM config file with defaults."""
         try:
-            current_dir = os.path.dirname(os.path.abspath(__file__))
-            source_path = os.path.join(current_dir, "vllm_servers.yaml")
+            # Go up 4 levels from src/cloudmesh/ai/vllm/ to reach project root
+            root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", ".."))
+            config_dir = os.path.join(root_dir, "config")
+            source_path = os.path.join(config_dir, "vllm_servers.yaml")
             if not os.path.exists(source_path):
-                source_path = os.path.join(current_dir, "vllm_servers_example.yaml")
+                source_path = os.path.join(config_dir, "vllm_servers_example.yaml")
                 
             dest_path = os.path.expanduser("~/.config/cloudmesh/llm.yaml")
             

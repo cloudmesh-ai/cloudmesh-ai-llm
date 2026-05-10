@@ -49,12 +49,15 @@ import click
 import os
 import subprocess
 import requests
+import yaml
+from pathlib import Path
 from rich.padding import Padding
 from cloudmesh.ai.common.io import console
 from textual.app import App, ComposeResult
 from textual.widgets import DataTable, Header, Footer
 from yamldb import YamlDB
 from cloudmesh.ai.common.remote import RemoteExecutor
+from cloudmesh.ai.command.launch import AiderLauncher
 from cloudmesh.ai.vllm.server_uva import ServerUVA
 from cloudmesh.ai.vllm.server_dgx import ServerDGX
 from cloudmesh.ai.vllm.batch_job import VLLMBatchJob
@@ -502,6 +505,53 @@ def reset():
             console.error("Error: Could not find default configuration file to reset from.")
     else:
         console.warning("Reset cancelled.")
+
+@llm_group.command(name="launch")
+@click.argument("client")
+def launch(client):
+    """Launch a specific LLM client (e.g., 'aider')."""
+    if client == "aider":
+        try:
+            # Path to the config file (relative to this file: src/cloudmesh/ai/command/vllm.py)
+            # Templates are in src/cloudmesh/ai/command/template/
+            config_path = Path(__file__).parent / "template" / "aider.yaml"
+            
+            if not config_path.exists():
+                console.error(f"Config file not found at {config_path}")
+                return
+
+            with open(config_path, 'r') as f:
+                config = yaml.safe_load(f)
+            
+            aider_config = config.get("cloudmesh", {}).get("ai", {}).get("aider", {})
+            model = aider_config.get("model")
+            key_file_path = aider_config.get("key_file")
+            url = aider_config.get("url")
+
+            if not all([model, key_file_path, url]):
+                console.error("Missing required configuration (model, key_file, or url) in aider.yaml")
+                return
+
+            key_path = Path(key_file_path).expanduser()
+            if not key_path.exists():
+                console.error(f"Key file not found at {key_path}")
+                return
+
+            api_key = key_path.read_text().strip()
+            
+            launcher_config = {
+                "model": model,
+                "OPENAI_API_KEY": api_key,
+                "OPENAI_API_BASE": url,
+            }
+            
+            console.print("[blue]Launching Aider with Gemma 4...[/blue]")
+            AiderLauncher().launch(client_config=launcher_config)
+            
+        except Exception as e:
+            console.error(f"Error launching aider: {e}")
+    else:
+        console.error(f"Unsupported client '{client}'. Supported clients: aider")
 
 @llm_group.command(name="prompt")
 @click.argument("text", required=False)
