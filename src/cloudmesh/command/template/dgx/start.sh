@@ -1,8 +1,5 @@
 # Credentials
 
-# Sets the background to a light red/pinkish hue
-printf '\e]11;#FFE4E1\a'
-
 HF_TOKEN=$(cat ../server_master_key.txt) 
 VLLM_API_KEY=$(cat ../server_master_key.txt)
 

@@ -230,13 +230,16 @@ def launch_vllm(name, ui, claude, info, export, port):
                 claude_cfg = clients.get("claude", {}) if isinstance(clients, dict) else {}
                 ClaudeLauncher().launch(client_config=claude_cfg)
             else:
-                console.msg("Backend is ready. You can now run 'cmc launch webui' or 'cmc launch claude'.")
-                
-                # Determine the port for the stop command example
+                # Display a dark green banner with service details
                 servers = orchestrator.db.get("cloudmesh.ai.server", {})
                 config = servers.get(name, {}) if isinstance(servers, dict) else {}
+                model_name = config.get("model", "Unknown Model")
                 actual_port = port or config.get("remote_port", 8000)
                 
+                banner_text = f"Model: {model_name}\nPort: {actual_port}"
+                console.banner(label="llm service started", txt=banner_text, color="dark_green")
+                
+                console.msg("Backend is ready. You can now run 'cmc launch webui' or 'cmc launch claude'.")
                 console.print(f"\n[dim]To stop this server, run: cmc launch stop {name} --port {actual_port}[/dim]")
         else:
             console.error("Backend preparation failed.")
