@@ -13,6 +13,7 @@ from cloudmesh.ai.vllm.config import VLLMConfig
 from cloudmesh.ai.vllm.client import VLLMClient
 from cloudmesh.ai.vllm.server_uva import ServerUVA
 from cloudmesh.ai.vllm.server_dgx import ServerDGX
+from cloudmesh.ai.vllm.squeue import SQueue
 from cloudmesh.ai.vpn.vpn import Vpn
 
 
@@ -62,10 +63,10 @@ def get_default_host(db=None):
     if db is None:
         config_path = os.path.expanduser("~/.config/cloudmesh/llm.yaml")
         db = YamlDB(filename=config_path)
-    
+
     # 1. Get the default server name
     default_server_name = db.get("cloudmesh.ai.default.server")
-    
+
     # 2. Get all configured servers
     servers = db.get("cloudmesh.ai.server", {})
     if not isinstance(servers, dict) or not servers:
@@ -74,13 +75,14 @@ def get_default_host(db=None):
     # 3. If no explicit default is set, use the first server in the list
     if not default_server_name:
         default_server_name = next(iter(servers))
-    
+
     # 4. Resolve the host for the determined server
     host = servers.get(default_server_name, {}).get("host")
     if host:
         return host
-    
+
     return None
+
 
 def get_server(host, db=None):
     """Helper to instantiate the correct server class based on host."""
@@ -88,6 +90,9 @@ def get_server(host, db=None):
     if "uva" in host_str.lower() or "rivanna" in host_str.lower():
         return ServerUVA(host_str, db=db)
     return ServerDGX(host_str, db=db)
+
+
+
 
 class VLLMOrchestrator:
     """Orchestrates the full pipeline from server start to client launch."""
@@ -239,17 +244,23 @@ class VLLMOrchestrator:
             console.error(f"DGX launch failed: {e}")
             return False
 
-    def stop_uva(self, server_name: str = None, port_pattern: str = None, job_id: str = None):
+    def stop_uva(
+        self, server_name: str = None, port_pattern: str = None, job_id: str = None
+    ):
         """Cancel the Slurm job for a UVA vLLM server. Supports JobID, fuzzy port, or config port."""
         if job_id:
             console.print(f"[blue]Stopping job {job_id}...[/blue]")
-            find_job_cmd = f"ssh uva 'scancel {job_id}'"
-        elif port_pattern:
+            try:
+                subprocess.run(f"ssh uva 'scancel {job_id}'", shell=True, check=True)
+                console.ok(f"Successfully cancelled job {job_id}.")
+                return True
+            except subprocess.CalledProcessError as e:
+                console.error(f"Failed to cancel job {job_id}: {e}")
+                return False
+
+        if port_pattern:
             console.print(
-                f"[blue]Searching for vLLM jobs matching pattern 'vllm_*{port_pattern}*'...[/blue]"
-            )
-            find_job_cmd = (
-                f"ssh uva 'squeue -h -o %i,%.10n | grep vllm_ | grep {port_pattern}'"
+                f"[blue]Searching for vLLM jobs matching port pattern '{port_pattern}'...[/blue]"
             )
         elif server_name:
             servers = self.db.get("cloudmesh.ai.server", {})
@@ -257,58 +268,86 @@ class VLLMOrchestrator:
             if not config:
                 console.error(f"Server {server_name} not found in config.")
                 return False
-            
+
             # Try persisted job_id first
             persisted_job = config.get("job_id")
             if persisted_job:
-                console.print(f"[blue]Stopping persisted job {persisted_job} for {server_name}...[/blue]")
-                find_job_cmd = f"ssh uva 'scancel {persisted_job}'"
-            else:
-                remote_port = config.get("remote_port", 8000)
-                job_name = f"vllm_{remote_port}"
                 console.print(
-                    f"[blue]Stopping vLLM server {server_name} (exact port {remote_port})...[/blue]"
+                    f"[blue]Stopping persisted job {persisted_job} for {server_name}...[/blue]"
                 )
-                find_job_cmd = f"ssh uva 'squeue -h -o %i -n {job_name}'"
+                try:
+                    subprocess.run(
+                        f"ssh uva 'scancel {persisted_job}'", shell=True, check=True
+                    )
+                    console.ok(f"Successfully cancelled job {persisted_job}.")
+                    return True
+                except subprocess.CalledProcessError as e:
+                    console.error(
+                        f"Failed to cancel persisted job {persisted_job}: {e}"
+                    )
+                    # Fall through to search by name if persisted ID fails
+
+            remote_port = config.get("remote_port", 8000)
+            console.print(
+                f"[blue]Searching for jobs associated with {server_name} (port {remote_port})...[/blue]"
+            )
         else:
             console.error("No server name, port pattern, or job ID provided.")
             return False
 
         try:
-            result = subprocess.run(
-                find_job_cmd, shell=True, capture_output=True, text=True, check=True
-            )
-            output = result.stdout.strip()
+            # Use the SQueue wrapper for robust data retrieval
+            # Use the host from the server config if available, otherwise default to 'uva'
+            host = "uva"
+            if server_name:
+                servers_config = self.db.get("cloudmesh.ai.server", {})
+                if isinstance(servers_config, dict):
+                    host = servers_config.get(server_name, {}).get("host", "uva")
+            
+            jobs_data = SQueue(host=host).get_jobs()
 
-            if not output:
+            # DEBUG: Show all jobs found by SQueue to diagnose matching issues
+            if jobs_data:
+                console.print(
+                    f"[dim]SQueue found {len(jobs_data)} total jobs. Scanning for matches...[/dim]"
+                )
+            else:
+                console.print("[dim]SQueue returned no jobs.[/dim]")
+
+            job_ids = []
+            servers_config = self.db.get("cloudmesh.ai.server", {})
+            for job in jobs_data:
+                jid = job.get("job_id")
+                jname = job.get("name", "")
+
+                if port_pattern and port_pattern in jname:
+                    console.print(f"[dim]  Match found: job {jid} (name: {jname})[/dim]")
+                    job_ids.append(jid)
+                elif server_name:
+                    server_cfg = (
+                        servers_config.get(server_name, {})
+                        if isinstance(servers_config, dict)
+                        else {}
+                    )
+                    remote_port = server_cfg.get("remote_port", 8000)
+                    # Match if job name is exactly vllm_{port} or contains it
+                    if jname == f"vllm_{remote_port}" or f"vllm_{remote_port}" in jname:
+                        console.print(f"[dim]  Match found: job {jid} (name: {jname})[/dim]")
+                        job_ids.append(jid)
+
+            if not job_ids:
                 console.warning(f"No running jobs found matching the criteria.")
                 return False
 
-            # Extract Job IDs (first column)
-            job_ids = []
-            for line in output.split("\n"):
-                if line:
-                    job_id = line.split()[0]
-                    job_ids.append(job_id)
+            if not job_ids:
+                console.warning(f"No running jobs found matching the criteria.")
+                return False
 
             for id in job_ids:
                 console.print(f"[dim]Cancelling job {id}...[/dim]")
                 subprocess.run(f"ssh uva 'scancel {id}'", shell=True, check=True)
 
             console.ok(f"Successfully cancelled {len(job_ids)} job(s).")
-            return True
-
-            if not job_id:
-                console.warning(f"No running job found with name {job_name}.")
-                return False
-
-            # If multiple jobs are found, split by newline and cancel all
-            for id in job_id.split("\n"):
-                if id:
-                    console.print(f"[dim]Cancelling job {id}...[/dim]")
-                    subprocess.run(f"ssh uva 'scancel {id}'", shell=True, check=True)
-
-            console.ok(f"Successfully cancelled job(s) for {job_name}.")
             return True
         except subprocess.CalledProcessError as e:
             console.error(f"Failed to stop UVA server: {e}")
@@ -318,46 +357,62 @@ class VLLMOrchestrator:
         """List all running vLLM servers on UVA."""
         console.banner("Running vLLM Servers")
         try:
-            # Query squeue for all jobs matching vllm_
-            cmd = "ssh uva 'squeue -h -o %i,%.10n,%.10j'"
-            result = subprocess.run(cmd, shell=True, capture_output=True, text=True, check=True)
-            output = result.stdout.strip()
-            
-            if not output:
+            # Use the SQueue wrapper for robust data retrieval
+            jobs_data = SQueue().get_jobs()
+
+            if not jobs_data:
                 console.warning("No running vLLM servers found on UVA.")
                 return []
 
             servers_config = self.db.get("cloudmesh.ai.server", {})
             running_jobs = []
-            
-            for line in output.splitlines():
-                parts = line.split()
-                if len(parts) < 3: continue
-                job_id, node, job_name = parts[0], parts[1], parts[2]
-                
+
+            for job in jobs_data:
+                job_id = job.get("job_id")
+                node = (
+                    job.get("nodes", [{}])[0].get("name", "Unknown")
+                    if isinstance(job.get("nodes"), list)
+                    else "Unknown"
+                )
+                job_name = job.get("name", "")
+
+                if "vllm_" not in job_name:
+                    continue
+
                 # Try to find which configured server this job belongs to
                 server_name = "Unknown"
                 port = "Unknown"
                 if isinstance(servers_config, dict):
                     for name, cfg in servers_config.items():
-                        if cfg.get("job_id") == job_id or f"vllm_{cfg.get('remote_port')}" == job_name:
+                        if (
+                            cfg.get("job_id") == job_id
+                            or f"vllm_{cfg.get('remote_port')}" == job_name
+                        ):
                             server_name = name
                             port = cfg.get("remote_port", "Unknown")
                             break
-                
-                running_jobs.append({
-                    "server": server_name,
-                    "job_id": job_id,
-                    "node": node,
-                    "port": port
-                })
-            
+
+                running_jobs.append(
+                    {
+                        "server": server_name,
+                        "job_id": job_id,
+                        "node": node,
+                        "port": port,
+                    }
+                )
+
+            if not running_jobs:
+                console.warning("No vLLM servers found in the running jobs list.")
+                return []
+
             # Print as a table
             headers = ["Server", "Job ID", "Node", "Port"]
-            data = [[j["server"], j["job_id"], j["node"], j["port"]] for j in running_jobs]
+            data = [
+                [j["server"], j["job_id"], j["node"], j["port"]] for j in running_jobs
+            ]
             console.print_table(headers, data)
             return running_jobs
-            
+
         except Exception as e:
             console.error(f"Failed to list running servers: {e}")
             return []
@@ -511,7 +566,7 @@ PORT={remote_port} VLLM_IMAGE="{vllm_image}" bash {script_name}
     def prepare_backend(self, name, port_override: int = None):
         """Ensure vLLM server is running, tunneled, and healthy."""
         StopWatch.start("vllm_startup")
-        
+
         # Bypass YamlDB :memory: backend and load directly from disk to ensure fresh config
         try:
             with open(self.config_path, "r") as f:
@@ -569,7 +624,9 @@ PORT={remote_port} VLLM_IMAGE="{vllm_image}" bash {script_name}
                     console.ok("VPN connected successfully!")
                 else:
                     console.ok("VPN is already active.")
-            console.print(f"[dim]VPN check took: {StopWatch.get('vpn_check'):.2f}s[/dim]")
+            console.print(
+                f"[dim]VPN check took: {StopWatch.get('vpn_check'):.2f}s[/dim]"
+            )
 
         # 1. Initial Health Check
         console.banner("Initial Health Check")
@@ -577,7 +634,9 @@ PORT={remote_port} VLLM_IMAGE="{vllm_image}" bash {script_name}
         if client.is_alive():
             console.ok("vLLM server is already ALIVE and tunneled!")
             StopWatch.stop("vllm_startup")
-            console.print(f"[dim]Total startup time: {StopWatch.get('vllm_startup'):.2f}s[/dim]")
+            console.print(
+                f"[dim]Total startup time: {StopWatch.get('vllm_startup'):.2f}s[/dim]"
+            )
             StopWatch.benchmark()
             return True
 
@@ -602,7 +661,9 @@ PORT={remote_port} VLLM_IMAGE="{vllm_image}" bash {script_name}
                     if client.is_alive():
                         console.ok("vLLM server is now available!")
                         StopWatch.stop("vllm_startup")
-                        console.print(f"[dim]Total startup time: {StopWatch.get('vllm_startup'):.2f}s[/dim]")
+                        console.print(
+                            f"[dim]Total startup time: {StopWatch.get('vllm_startup'):.2f}s[/dim]"
+                        )
                         StopWatch.benchmark()
                         return True
 
@@ -612,7 +673,9 @@ PORT={remote_port} VLLM_IMAGE="{vllm_image}" bash {script_name}
                     console.warning(
                         "Local host detected. Please ensure the vLLM server is started locally."
                     )
-        console.print(f"[dim]Platform launch took: {StopWatch.get('platform_launch'):.2f}s[/dim]")
+        console.print(
+            f"[dim]Platform launch took: {StopWatch.get('platform_launch'):.2f}s[/dim]"
+        )
 
         # 3. Final Health Check Poll (Remote check before tunneling)
         if platform == "uva":
@@ -693,9 +756,11 @@ PORT={remote_port} VLLM_IMAGE="{vllm_image}" bash {script_name}
                     tunnel_cmd = f"ssh -L {local_port}:{node_name}:{remote_port} uva -N"
                     subprocess.Popen(tunnel_cmd, shell=True)
                     console.ok("Tunnel established in background.")
-                    
+
                     StopWatch.stop("vllm_startup")
-                    console.print(f"[bold green]Total startup time: {StopWatch.get('vllm_startup'):.2f}s[/bold green]")
+                    console.print(
+                        f"[bold green]Total startup time: {StopWatch.get('vllm_startup'):.2f}s[/bold green]"
+                    )
                     StopWatch.benchmark()
                     return True
 
