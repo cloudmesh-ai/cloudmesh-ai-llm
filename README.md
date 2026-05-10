@@ -6,7 +6,7 @@ The Cloudmesh AI LLM Orchestrator provides a unified interface to launch, manage
 
 - **Unified Launch**: A single command to handle the entire pipeline from infrastructure allocation to health checks.
 - **Platform-Aware Routing**: Specialized workflows for different platforms (UVA, DGX, Default).
-- **Automated HPC Pipeline**: For UVA, it automates VPN connection, `ijob` GPU allocation, dynamic SSH tunneling, and Apptainer execution.
+- **Automated HPC Pipeline**: For UVA, it automates VPN connection, Slurm GPU allocation, dynamic SSH tunneling, and Apptainer execution.
 - **Hybrid Script-Driven Approach**: Uses shell scripts for the actual vLLM launch, allowing maximum flexibility for GPU flags and mount points.
 - **Local Export & Customization**: Export launch scripts locally, modify them, and the orchestrator will use your customized versions.
 - **Performance Monitoring**: Integrated benchmarking to measure the duration of each startup phase (VPN, Allocation, Model Loading).
@@ -58,8 +58,8 @@ cloudmesh:
 ### The UVA Pipeline
 When you run `cmc llm start gemma-uva`, the following happens:
 1. **VPN**: Checks and connects to the UVA VPN.
-2. **Allocation**: Requests a GPU allocation via `ijob` (e.g., 4x A100).
-3. **Node Capture**: Identifies the allocated compute node.
+2. **Allocation**: Submits a Slurm batch script to request GPU resources.
+3. **Node Capture**: Polls the cluster to identify the allocated compute node.
 4. **Deployment**: Uploads `start_uva.sh` to the node.
 5. **Execution**: Runs the script via Apptainer to start the vLLM server.
 6. **Health Check**: Verifies the server is alive on the remote node via SSH.
@@ -111,6 +111,7 @@ cmc llm start gemma-uva
 | `cmc llm start <name> --export` | Exports the launch scripts and config to the current directory for editing. |
 | `cmc llm start <name> --ui` | Launches the backend and then automatically starts the Open WebUI. |
 | `cmc llm start <name> --claude` | Launches the backend and then starts Claude Code. |
+| `cmc llm launch <client>` | Launches a specialized client (e.g., `cmc llm launch aider`). |
 | `cmc llm stop [ID/Name/Port]` | Stops a server using JobID, server name, or port. If no ID is provided, stops the last started server. |
 | `cmc llm info` | Lists all currently running vLLM servers on the platform. |
 | `cmc llm default server <name>` | Sets the default server for the `llm` group. |
@@ -140,15 +141,15 @@ cmc llm start gemma-uva --port 18124
 ```
 
 ### 3. What happens under the hood:
-- **Allocation**: The orchestrator requests a GPU node via `ijob`.
+- **Allocation**: The orchestrator submits a Slurm script to request a GPU node.
 - **Deployment**: It creates a directory like `/scratch/{user}/cloudmesh/vllm_18124` on the allocated node.
 - **Execution**: It starts the vLLM server on remote port `18124`.
 - **Health Check**: It polls the remote node until port `18124` is open.
 - **Tunneling**: It establishes a background SSH tunnel: `localhost:18124` $\rightarrow$ `node:18124`.
 
 ### 4. Verify and Connect
-Once the command reports "Backend is ready!", you can verify the tunnel is active:
+Once the command reports "Backend is ready!", you can verify the tunnel is active (replace `<YOUR_API_KEY>` with your actual key):
 ```bash
-curl http://localhost:18124/v1/models
+curl -H "Authorization: Bearer <YOUR_API_KEY>" http://localhost:18124/v1/models
 ```
 You can then point your UI or Claude Code to `http://localhost:18124/v1`.
