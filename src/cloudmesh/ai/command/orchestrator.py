@@ -250,12 +250,11 @@ class VLLMOrchestrator:
         """Cancel the Slurm job for a UVA vLLM server. Supports JobID, fuzzy port, or config port."""
         if job_id:
             console.print(f"[blue]Stopping job {job_id}...[/blue]")
-            try:
-                subprocess.run(f"ssh uva 'scancel {job_id}'", shell=True, check=True)
+            if SQueue().cancel(job_id):
                 console.ok(f"Successfully cancelled job {job_id}.")
                 return True
-            except subprocess.CalledProcessError as e:
-                console.error(f"Failed to cancel job {job_id}: {e}")
+            else:
+                console.error(f"Failed to cancel job {job_id}.")
                 return False
 
         if port_pattern:
@@ -275,16 +274,11 @@ class VLLMOrchestrator:
                 console.print(
                     f"[blue]Stopping persisted job {persisted_job} for {server_name}...[/blue]"
                 )
-                try:
-                    subprocess.run(
-                        f"ssh uva 'scancel {persisted_job}'", shell=True, check=True
-                    )
+                if SQueue().cancel(persisted_job):
                     console.ok(f"Successfully cancelled job {persisted_job}.")
                     return True
-                except subprocess.CalledProcessError as e:
-                    console.error(
-                        f"Failed to cancel persisted job {persisted_job}: {e}"
-                    )
+                else:
+                    console.error(f"Failed to cancel persisted job {persisted_job}.")
                     # Fall through to search by name if persisted ID fails
 
             remote_port = config.get("remote_port", 8000)
@@ -345,7 +339,7 @@ class VLLMOrchestrator:
 
             for id in job_ids:
                 console.print(f"[dim]Cancelling job {id}...[/dim]")
-                subprocess.run(f"ssh uva 'scancel {id}'", shell=True, check=True)
+                SQueue(host=host).cancel(id)
 
             console.ok(f"Successfully cancelled {len(job_ids)} job(s).")
             return True
@@ -470,8 +464,13 @@ class VLLMOrchestrator:
             if not vllm_image or not vllm_image.startswith("/"):
                 vllm_image = f"/scratch/{remote_user}/{vllm_image or 'vllm_gemma4.sif'}"
 
+            # Get email from config or use default
+            email = config.get("email", "laszewski@gmail.com")
+
             sbatch_script = f"""#!/bin/bash
 #SBATCH --job-name=vllm_{remote_port}
+#SBATCH --mail-user={email}
+#SBATCH --mail-type=BEGIN
 #SBATCH --partition=bii-gpu
 #SBATCH --reservation=bi_fox_dgx
 #SBATCH --account=bi_dsc_community
