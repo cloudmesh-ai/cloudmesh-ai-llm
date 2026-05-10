@@ -27,7 +27,7 @@ dependencies = [
 version = {file = "VERSION"}
 
 [project.entry-points."cloudmesh.ai.command"]
-vllm = "cloudmesh.ai.command.vllm:vllm_group"
+llm = "cloudmesh.ai.command.vllm:vllm_group"
 
 [tool.setuptools.packages.find]
 where = ["src"]

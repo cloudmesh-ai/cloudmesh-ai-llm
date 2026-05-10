@@ -30,6 +30,11 @@ def launch_group():
     """Launch AI tools and interfaces."""
     pass
 
+@click.group()
+def llm_group():
+    """Manage vLLM servers."""
+    pass
+
 @launch_group.command(name="webui")
 def launch_webui():
     """Launch the Open WebUI container."""
@@ -147,14 +152,17 @@ def config_info():
     except Exception as e:
         console.error(f"Error retrieving configuration info: {e}")
 
-@launch_group.command(name="llm")
-@click.argument("name")
+@llm_group.command(
+    name="start", 
+    context_settings=dict(allow_intermixed_options=True)
+)
 @click.option("--ui", is_flag=True, help="Launch WebUI after backend is ready")
 @click.option("--claude", is_flag=True, help="Launch Claude after backend is ready")
 @click.option("--info", is_flag=True, help="Display server configuration info")
 @click.option("--export", is_flag=True, help="Export launch scripts to local directory for customization")
 @click.option("--port", type=int, help="Override both local and remote ports")
-def launch_vllm(name, ui, claude, info, export, port):
+@click.argument("name")
+def start_vllm(name, ui, claude, info, export, port):
     """Full pipeline: Start vLLM server -> Tunnel -> Health Check -> Optional UI."""
     try:
         if info:
@@ -240,27 +248,74 @@ def launch_vllm(name, ui, claude, info, export, port):
                 console.banner(label="llm service started", txt=banner_text, color="dark_green")
                 
                 console.msg("Backend is ready. You can now run 'cmc launch webui' or 'cmc launch claude'.")
-                console.print(f"\n[dim]To stop this server, run: cmc launch stop {name} --port {actual_port}[/dim]")
+                console.print(f"\n[dim]To stop this server, run: cmc llm stop {name} --port {actual_port}[/dim]")
         else:
             console.error("Backend preparation failed.")
     except Exception as e:
         console.error(f"Error orchestrating vLLM launch: {e}")
 
-@launch_group.command(name="stop")
-@click.argument("name")
+@llm_group.command(name="stop")
+@click.argument("identifier", required=False)
 @click.option("--port", type=str, help="Port or partial port (e.g. '123') to identify the job")
-def stop_vllm(name, port):
-    """Stop a vLLM server (UVA HPC specific)."""
+def stop_vllm(identifier, port):
+    """Stop a vLLM server (UVA HPC specific). Supports JobID, fuzzy port, or config port."""
     try:
         orchestrator = VLLMOrchestrator()
-        if orchestrator.stop_uva(name, port_override=port):
-            console.ok(f"Successfully stopped server {name}.")
+        
+        # 1. If identifier is provided, it's either a server name or a fuzzy port/JobID
+        if identifier:
+            # If it's a number, treat as fuzzy port/JobID
+            if identifier.isdigit():
+                if orchestrator.stop_uva(port_pattern=identifier):
+                    console.ok(f"Successfully stopped server matching {identifier}.")
+                    return
+            # Otherwise treat as server name
+            if orchestrator.stop_uva(server_name=identifier, port_pattern=port):
+                console.ok(f"Successfully stopped server {identifier}.")
+                return
+        
+        # 2. If --port is provided but no identifier
+        elif port:
+            # We need a server name to use stop_uva's config logic, 
+            # but if we only have a port, we can use the fuzzy match logic
+            if orchestrator.stop_uva(port_pattern=port):
+                console.ok(f"Successfully stopped server matching port {port}.")
+                return
+
+        # 3. No args: try to stop the last started server from config
         else:
-            console.error(f"Failed to stop server {name}.")
+            servers = orchestrator.db.get("cloudmesh.ai.server", {})
+            if not servers:
+                console.error("No servers configured. Use 'cmc llm start <name>' first.")
+                return
+            
+            # Find the server with a persisted job_id
+            last_server = None
+            for name, cfg in servers.items():
+                if cfg.get("job_id"):
+                    last_server = name
+                    break
+            
+            if last_server:
+                if orchestrator.stop_uva(server_name=last_server):
+                    console.ok(f"Successfully stopped last started server: {last_server}.")
+                    return
+            
+            console.error("No active server found in configuration to stop.")
+            
     except Exception as e:
         console.error(f"Error stopping vLLM server: {e}")
 
-@launch_group.command(name="install")
+@llm_group.command(name="info")
+def info_vllm():
+    """List all running vLLM servers."""
+    try:
+        orchestrator = VLLMOrchestrator()
+        orchestrator.list_running_servers()
+    except Exception as e:
+        console.error(f"Error listing servers: {e}")
+
+@llm_group.command(name="install")
 @click.argument("tool")
 def install_tool(tool):
     """Install AI tools (e.g., aider)."""

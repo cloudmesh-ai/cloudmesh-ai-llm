@@ -9,6 +9,7 @@ The Cloudmesh AI LLM Orchestrator provides a unified interface to launch, manage
 - **Automated HPC Pipeline**: For UVA, it automates VPN connection, `ijob` GPU allocation, dynamic SSH tunneling, and Apptainer execution.
 - **Hybrid Script-Driven Approach**: Uses shell scripts for the actual vLLM launch, allowing maximum flexibility for GPU flags and mount points.
 - **Local Export & Customization**: Export launch scripts locally, modify them, and the orchestrator will use your customized versions.
+- **Performance Monitoring**: Integrated benchmarking to measure the duration of each startup phase (VPN, Allocation, Model Loading).
 
 ---
 
@@ -55,7 +56,7 @@ cloudmesh:
 ## Workflows
 
 ### The UVA Pipeline
-When you run `cmc launch llm gemma-uva`, the following happens:
+When you run `cmc llm start gemma-uva`, the following happens:
 1. **VPN**: Checks and connects to the UVA VPN.
 2. **Allocation**: Requests a GPU allocation via `ijob` (e.g., 4x A100).
 3. **Node Capture**: Identifies the allocated compute node.
@@ -65,7 +66,7 @@ When you run `cmc launch llm gemma-uva`, the following happens:
 7. **Dynamic Tunnel**: Establishes an SSH tunnel from your local port to the allocated node in a separate background process once the server is ready.
 
 ### The DGX Pipeline
-When you run `cmc launch llm gemma-dgx`:
+When you run `cmc llm start gemma-dgx`:
 1. **VPN**: Ensures the VPN is active.
 2. **Execution**: Runs the `start_dgx.sh` script (typically using Docker).
 3. **Health Check**: Polls the API until the model is fully loaded.
@@ -78,7 +79,7 @@ If you need to change vLLM arguments (e.g., `--gpu-memory-utilization` or `--max
 
 ### 1. Export the scripts
 ```bash
-cmc launch llm gemma-uva --export
+cmc llm start gemma-uva --export
 ```
 This will save `start_uva.sh` and `gemma-uva_config.yaml` to your current directory.
 
@@ -96,7 +97,7 @@ apptainer run --nv \
 ### 3. Launch
 Run the launch command again. The orchestrator will detect the local `start_uva.sh` and upload **your modified version** to the remote machine instead of the default template.
 ```bash
-cmc launch llm gemma-uva
+cmc llm start gemma-uva
 ```
 
 ---
@@ -105,11 +106,15 @@ cmc launch llm gemma-uva
 
 | Command | Description |
 | :--- | :--- |
-| `cmc launch llm <name>` | Full pipeline: VPN $\rightarrow$ Launch $\rightarrow$ Tunnel $\rightarrow$ Health Check. |
-| `cmc launch llm <name> --export` | Exports the launch scripts and config to the current directory for editing. |
-| `cmc launch llm <name> --ui` | Launches the backend and then automatically starts the Open WebUI. |
-| `cmc launch llm <name> --claude` | Launches the backend and then starts Claude Code. |
-| `cmc launch config info` | Displays the resolved in-memory configuration. |
+| `cmc llm start <name>` | Full pipeline: VPN $\rightarrow$ Launch $\rightarrow$ Tunnel $\rightarrow$ Health Check. |
+| `cmc llm start <name> --port <port>` | Launch with a specific port override (local and remote). |
+| `cmc llm start <name> --export` | Exports the launch scripts and config to the current directory for editing. |
+| `cmc llm start <name> --ui` | Launches the backend and then automatically starts the Open WebUI. |
+| `cmc llm start <name> --claude` | Launches the backend and then starts Claude Code. |
+| `cmc llm stop [ID/Name/Port]` | Stops a server using JobID, server name, or port. If no ID is provided, stops the last started server. |
+| `cmc llm info` | Lists all currently running vLLM servers on the platform. |
+| `cmc llm default server <name>` | Sets the default server for the `llm` group. |
+| `cmc llm configure` | Interactively configure vLLM settings. |
 
 ---
 
@@ -120,7 +125,7 @@ If you want to launch a model on a specific port (e.g., `18124`) without modifyi
 ### 1. Initialize Configuration
 Initialize the server configuration in your `llm.yaml` file using a host from your SSH config (e.g., `uva` or `dgx`):
 ```bash
-cmc launch init server uva
+cmc llm init
 ```
 
 You can verify the configuration was added correctly by viewing the file:
@@ -131,7 +136,7 @@ cat ~/.config/cloudmesh/llm.yaml
 ### 2. Launch with Port Override
 Run the launch command with the `--port` flag. This will override both the local and remote ports to `18124` and create a unique remote directory for this instance.
 ```bash
-cmc launch llm gemma-uva --port 18124
+cmc llm start gemma-uva --port 18124
 ```
 
 ### 3. What happens under the hood:

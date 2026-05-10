@@ -63,32 +63,7 @@ from cloudmesh.ai.vllm.exceptions import VLLMError, VLLMConnectionError, VLLMCon
 from cloudmesh.ai.vllm.config import VLLMConfig
 from cloudmesh.ai.vllm.client import VLLMClient
 from cloudmesh.ai.vllm.ijob import IJob
-
-
-def get_default_host(db=None):
-    """Retrieve the default host by resolving the default server name."""
-    if db is None:
-        config_path = os.path.expanduser("~/.config/cloudmesh/llm.yaml")
-        db = YamlDB(filename=config_path)
-    
-    # 1. Get the default server name
-    default_server_name = db.get("cloudmesh.ai.default.server")
-    
-    # 2. Get all configured servers
-    servers = db.get("cloudmesh.ai.server", {})
-    if not isinstance(servers, dict) or not servers:
-        return None
-
-    # 3. If no explicit default is set, use the first server in the list
-    if not default_server_name:
-        default_server_name = next(iter(servers))
-    
-    # 4. Resolve the host for the determined server
-    host = servers.get(default_server_name, {}).get("host")
-    if host:
-        return host
-    
-    return None
+from cloudmesh.ai.command.orchestrator import VLLMOrchestrator, get_default_host, get_server
 
 class RenderVLLMTable:
     """Helper class to render vLLM configurations into a Textual DataTable."""
@@ -159,12 +134,6 @@ def select_vllm_service(db, group_filter=None):
     
     return app.selected_service, None, app.selected_host
 
-def get_server(host, db=None):
-    """Helper to instantiate the correct server class based on host."""
-    host_str = str(host)
-    if "uva" in host_str.lower() or "rivanna" in host_str.lower():
-        return ServerUVA(host_str, db=db)
-    return ServerDGX(host_str, db=db)
 
 @click.group()
 def llm_group():
@@ -172,179 +141,138 @@ def llm_group():
     pass
 
 @llm_group.command(name="start")
-@click.argument("name", required=False)
-@click.option("--tunnel", is_flag=True, help="Create an SSH tunnel to the server")
-@click.option("--ui", is_flag=True, help="Interactively select the vLLM service from a table")
-@click.option("--sbatch", is_flag=True, help="Use Slurm sbatch instead of ijob (UVA only)")
-@click.option("--device", help="Explicitly specify GPU device IDs (e.g. '0,1,2,3')")
-@click.option("--dryrun", is_flag=True, help="Dry run mode")
-def start(name, tunnel, ui, sbatch, device, dryrun):
-    """Start a vLLM server using a named configuration."""
+@click.option("--ui", is_flag=True, help="Launch WebUI after backend is ready")
+@click.option("--claude", is_flag=True, help="Launch Claude after backend is ready")
+@click.option("--info", is_flag=True, help="Display server configuration info")
+@click.option("--export", is_flag=True, help="Export launch scripts to local directory for customization")
+@click.option("--port", type=int, help="Override both local and remote ports")
+@click.argument("name")
+def start(name, ui, claude, info, export, port):
+    """Full pipeline: Start vLLM server -> Tunnel -> Health Check -> Optional UI."""
     try:
-        config_path = os.path.expanduser("~/.config/cloudmesh/llm.yaml")
-        db = YamlDB(filename=config_path)
-        
-        if ui and not name:
-            name, group, selected_host = select_vllm_service(db)
-            if not name:
-                return # select_vllm_service already prints error
-        
-        if not name:
-            # Try to get default service name
-            name = db.get("config.default_service")
-            if not name:
-                raise ValueError("No service name provided. Use 'cmc llm start [NAME]' or 'cmc llm start --ui'.")
+        if info:
+            orchestrator = VLLMOrchestrator()
+            servers = orchestrator.db.get("cloudmesh.ai.server", {})
+            config_path = orchestrator.config_path
+            if isinstance(servers, dict) and name in servers:
+                config = servers[name]
+                info_text = f"Config File: {config_path}\n"
+                info_text += "\n".join([f"{k}: {v}" for k, v in config.items()])
+                console.print(banner(f"Server Info: {name}", info_text))
+            else:
+                available = list(servers.keys()) if isinstance(servers, dict) else []
+                error_msg = (
+                    f"Server '{name}' not found in configuration.\n"
+                    f"Available servers: {', '.join(available) if available else 'None'}"
+                )
+                console.error(error_msg)
+                
+                try:
+                    console.print(banner("Configuration File Location", config_path))
+                    with open(config_path, 'r') as f:
+                        content = f.read()
+                        console.print(banner("Configuration File Contents", content))
+                except Exception as e:
+                    console.error(f"Could not read configuration file: {e}")
+            return
 
-        # Resolve host from the service name in the config
-        servers = db.get("cloudmesh.ai.server", {})
-        target_host = None
-        group = None
-        if isinstance(servers, dict):
-            config = servers.get(name, {})
-            target_host = config.get("host")
-        
-        if not target_host:
-            # Fallback to default host if service not found or host not specified in service
-            target_host = get_default_host(db)
-            if not target_host:
-                raise ValueError(f"Could not resolve host for service '{name}' and no default host configured.")
-        
-        target_host = str(target_host)
-        group = "uva" if ("uva" in target_host.lower() or "rivanna" in target_host.lower()) else "dgx"
-        server = get_server(target_host, db=db)
-        config = VLLMConfig(db, group, name)
-        
-        if device:
-            # Override the default device configuration if provided
-            config.set("device", device)
-            
-        start_cmd = server.get_start_command(name)
-        
-        # Banner 1: Server Details
-        details_content = f"Host: {target_host}\nService: {name}\n"
-        if config:
-            details_content += f"Model: {config.get('model')}\nImage: {config.get('image')}\nPort: {config.get('port', '8000')}\n"
-        
-        console.banner(f"Start vLLM Server: {name}", details_content)
-        
-        # Banner 2: Execution Plan
-        ijob_helper = IJob(db).get(group, name)
-        user = ijob_helper.username()
-        working_dir_val = config.get('working_dir', '/scratch/$USER/cloudmesh/run')
-        working_dir = str(working_dir_val).replace("$USER", user)
-        script_path = f"{working_dir}/start_{name}.sh"
-        exec_mode = "sbatch" if sbatch else "ijob"
-        
-        # Determine the detailed execution command (including partition/reservation for UVA ijob)
-        exec_cmd_display = exec_mode
-        if exec_mode == "ijob" and group == "uva":
-            batch_job = VLLMBatchJob(config, script_path)
-            try:
-                exec_cmd_display = batch_job.generate_ijob_command()
-            except ValueError as e:
-                raise ValueError(f"Configuration error for interactive startup: {e}")
+        orchestrator = VLLMOrchestrator()
 
-        execution_plan = (
-            f"Step 1. Shell script: {script_path}\n"
-            f"Step 2. Upload method: SSH heredoc (cat << 'EOF')\n"
-            f"Step 3. Execution mode: {exec_mode}\n"
-            f"Step 4. Remote command: {exec_cmd_display} {script_path}"
-        )
-        console.banner("Execution Plan", execution_plan)
-
-        # Detailed Step Panels (indented)
-        step1_cmd = f"mkdir -p {working_dir}"
-        step2_cmd = f"Write content to {script_path}"
-        step4_cmd = f"{exec_cmd_display} {script_path}"
-
-        console.banner('Step 1: Create directory', step1_cmd, padding=(0, 0, 0, 4))
-        console.banner('Step 2: Upload script', step2_cmd, padding=(0, 0, 0, 4))
-        console.banner('Step 3: Execution mode', exec_mode, padding=(0, 0, 0, 4))
-        console.banner('Step 4: Execute remote command', step4_cmd, padding=(0, 0, 0, 4))
-
-        if exec_mode == "ijob" and group == "uva":
-            # Print ijob details in a banner
-            ijob_details = (
-                f"Allocation: {config.get('allocation') or 'Not specified'}\n"
-                f"Partition: {config.get('partition')}\n"
-                f"Time: {config.get('time', '24:00:00')}\n"
-                f"GRES: {config.get('gres', 'gpu:1')}\n"
-                f"Reservation: {config.get('reservation') or 'None'}"
-            )
-            console.banner("ijob Parameters", ijob_details)
-
-            # Print the exact ijob command in a banner
-            console.banner("ijob Command", f"{exec_cmd_display} {script_path}")
-        
-        # Banner 3: Command to be executed
-        console.banner("Command to be executed", start_cmd)
-
-        raw_sequence = (
-            f"RemoteExecutor.execute('mkdir -p {working_dir}')\n"
-            f"RemoteExecutor.write_remote_file(content, '{script_path}')\n"
-            f"RemoteExecutor.execute('chmod +x {script_path}')\n"
-            f"RemoteExecutor.execute('{exec_cmd_display} {script_path}')"
-        )
-        console.print(f"\n[bold]Remote Execution Sequence:[/bold]\n{raw_sequence}\n")
-
-        if not console.ynchoice(f"Do you want to proceed with starting vLLM server '{name}' on {target_host}?", default=True):
-            console.warning("Start cancelled by user.")
+        if export:
+            console.print(f"[blue]Exporting scripts for {name}...[/blue]")
+            if orchestrator.export_scripts(name):
+                console.ok("Scripts exported successfully. You can now edit them locally.")
+            else:
+                console.error("Failed to export scripts.")
             return
         
-        if not dryrun:
-            with RemoteExecutor(str(target_host)) as executor:
-                executor.execute(f"mkdir -p {str(working_dir)}")
-                executor.write_remote_file(str(start_cmd), str(script_path))
-                executor.execute(f"chmod +x {str(script_path)}")
-                executor.execute(f"{str(exec_cmd_display)} {str(script_path)}")
-            console.ok(f"Successfully started vLLM server '{name}' on {target_host}")
+        # Check if the name refers to a client instead of a server
+        clients = orchestrator.db.get("cloudmesh.ai.client", {})
+        if isinstance(clients, dict) and name in clients:
+            client_config = clients[name]
+            launcher_name = client_config.get("launcher")
+            
+            console.print(banner(f"Launching Client: {name}", f"Host: {client_config.get('host')}\nPort: {client_config.get('port')}\nLauncher: {launcher_name}"))
+            
+            launchers = {
+                "webui": WebUILauncher,
+                "claude": ClaudeLauncher,
+                "aider": AiderLauncher,
+            }
+            
+            launcher_class = launchers.get(launcher_name)
+            if launcher_class:
+                launcher_class().launch(client_config=client_config)
+            else:
+                console.error(f"Unsupported or missing launcher '{launcher_name}' for client '{name}'.")
+            return
+
+        if orchestrator.prepare_backend(name, port_override=port):
+            console.ok(f"Backend {name} is ready!")
+            
+            if ui:
+                console.print("[bold green]Launching WebUI...[/bold green]")
+                clients = orchestrator.db.get("cloudmesh.ai.client", {})
+                webui_cfg = clients.get("openwebui", {}) if isinstance(clients, dict) else {}
+                WebUILauncher().launch(client_config=webui_cfg)
+            elif claude:
+                console.print("[bold green]Launching Claude...[/bold green]")
+                clients = orchestrator.db.get("cloudmesh.ai.client", {})
+                claude_cfg = clients.get("claude", {}) if isinstance(clients, dict) else {}
+                ClaudeLauncher().launch(client_config=claude_cfg)
+            else:
+                servers = orchestrator.db.get("cloudmesh.ai.server", {})
+                config = servers.get(name, {}) if isinstance(servers, dict) else {}
+                model_name = config.get("model", "Unknown Model")
+                actual_port = port or config.get("remote_port", 8000)
+                
+                banner_text = f"Model: {model_name}\nPort: {actual_port}"
+                console.banner(label="llm service started", txt=banner_text, color="dark_green")
+                
+                console.msg("Backend is ready. You can now run 'cmc launch webui' or 'cmc launch claude'.")
+                console.print(f"\n[dim]To stop this server, run: cmc llm stop {name} --port {actual_port}[/dim]")
         else:
-            console.banner("DRY-RUN", "Execution skipped as requested.")
-        
-        if tunnel:
-            console.print(f"[blue]Creating SSH tunnel to {target_host}...[/blue]")
-            server.tunnel(name)
-            console.ok(f"SSH tunnel created: localhost:{config.get('port', '8000')} -> {target_host}")
+            console.error("Backend preparation failed.")
     except Exception as e:
         import traceback
-        console.error(f"Error starting vLLM server: {e}")
+        console.error(f"Error orchestrating vLLM launch: {e}")
         console.print(traceback.format_exc())
 
 @llm_group.command(name="stop")
-@click.argument("name")
-@click.option("--tunnel", is_flag=True, help="Close the SSH tunnel after stopping")
-def stop(name, tunnel):
-    """Stop the vLLM server."""
+@click.argument("identifier", required=False)
+@click.option("--port", type=str, help="Port or partial port (e.g. '123') to identify the job")
+def stop(identifier, port):
+    """Stop a vLLM server (UVA HPC specific). Supports JobID, fuzzy port, or config port."""
     try:
-        config_path = os.path.expanduser("~/.config/cloudmesh/llm.yaml")
-        db = YamlDB(filename=config_path)
-        servers = db.get("cloudmesh.ai.server", {})
-        target_host = None
-        if isinstance(servers, dict):
-            target_host = servers.get(name, {}).get("host")
+        orchestrator = VLLMOrchestrator()
         
-        if not target_host:
-            target_host = get_default_host()
-            if not target_host:
-                raise ValueError(f"Could not resolve host for service '{name}' and no default host configured.")
-        
-        server = get_server(target_host)
-        server.stop(name)
-        
-        if tunnel:
-            # Use TunnelManager to stop the tunnel
-            config_path = os.path.expanduser("~/.config/cloudmesh/llm.yaml")
-            db = YamlDB(filename=config_path)
-            server_config = db.get(f"cloudmesh.ai.server.{name}", {})
-            port = server_config.get('port', '8000')
-            
-            success, result = tunnel_manager.stop_tunnel(target_host, port)
-            if success:
-                console.ok(f"Tunnel closed (PID: {result})")
-            else:
-                console.warning(f"Could not close tunnel: {result}")
-            
-        console.ok(f"Successfully stopped vLLM server '{name}' on {target_host}")
+        if identifier:
+            if identifier.isdigit():
+                if orchestrator.stop_uva(port_pattern=identifier):
+                    console.ok(f"Successfully stopped server matching {identifier}.")
+                    return
+            if orchestrator.stop_uva(server_name=identifier, port_pattern=port):
+                console.ok(f"Successfully stopped server {identifier}.")
+                return
+        elif port:
+            if orchestrator.stop_uva(port_pattern=port):
+                console.ok(f"Successfully stopped server matching port {port}.")
+                return
+        else:
+            servers = orchestrator.db.get("cloudmesh.ai.server", {})
+            if not servers:
+                console.error("No servers configured. Use 'cmc llm start <name>' first.")
+                return
+            last_server = None
+            for name, cfg in servers.items():
+                if cfg.get("job_id"):
+                    last_server = name
+                    break
+            if last_server:
+                if orchestrator.stop_uva(server_name=last_server):
+                    console.ok(f"Successfully stopped last started server: {last_server}.")
+                    return
+            console.error("No active server found in configuration to stop.")
     except Exception as e:
         console.error(f"Error stopping vLLM server: {e}")
 
@@ -453,21 +381,12 @@ def logs(name):
 
 @llm_group.command(name="info")
 def info():
-    """Display current vLLM configuration."""
+    """List all running vLLM servers."""
     try:
-        config_path = os.path.expanduser("~/.config/cloudmesh/llm.yaml")
-        db = YamlDB(filename=config_path)
-        
-        default_server = db.get("cloudmesh.ai.default.server")
-        
-        info_content = (
-            f"Config File: {config_path}\n"
-            f"Default Server: [bold]{default_server or 'Not set'}[/bold]"
-        )
-        console.banner("vLLM Configuration Info", info_content)
-        
+        orchestrator = VLLMOrchestrator()
+        orchestrator.list_running_servers()
     except Exception as e:
-        console.error(f"Error retrieving configuration info: {e}")
+        console.error(f"Error listing servers: {e}")
 
 @click.group(name="tunnel")
 def tunnel_group():
