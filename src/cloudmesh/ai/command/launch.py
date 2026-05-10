@@ -6,8 +6,8 @@ This extension provides tools to launch and manage AI user interfaces
 and other supporting tools using Docker.
 
 Usage:
-    cme launch webui
-    cme launch stop webui
+    cmc launch webui
+    cmc launch stop webui
 """
 
 import click
@@ -230,11 +230,32 @@ def launch_vllm(name, ui, claude, info, export, port):
                 claude_cfg = clients.get("claude", {}) if isinstance(clients, dict) else {}
                 ClaudeLauncher().launch(client_config=claude_cfg)
             else:
-                console.msg("Backend is ready. You can now run 'cme launch webui' or 'cme launch claude'.")
+                console.msg("Backend is ready. You can now run 'cmc launch webui' or 'cmc launch claude'.")
+                
+                # Determine the port for the stop command example
+                servers = orchestrator.db.get("cloudmesh.ai.server", {})
+                config = servers.get(name, {}) if isinstance(servers, dict) else {}
+                actual_port = port or config.get("remote_port", 8000)
+                
+                console.print(f"\n[dim]To stop this server, run: cmc launch stop {name} --port {actual_port}[/dim]")
         else:
             console.error("Backend preparation failed.")
     except Exception as e:
         console.error(f"Error orchestrating vLLM launch: {e}")
+
+@launch_group.command(name="stop")
+@click.argument("name")
+@click.option("--port", type=str, help="Port or partial port (e.g. '123') to identify the job")
+def stop_vllm(name, port):
+    """Stop a vLLM server (UVA HPC specific)."""
+    try:
+        orchestrator = VLLMOrchestrator()
+        if orchestrator.stop_uva(name, port_override=port):
+            console.ok(f"Successfully stopped server {name}.")
+        else:
+            console.error(f"Failed to stop server {name}.")
+    except Exception as e:
+        console.error(f"Error stopping vLLM server: {e}")
 
 @launch_group.command(name="install")
 @click.argument("tool")

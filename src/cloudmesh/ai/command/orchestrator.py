@@ -183,6 +183,64 @@ class VLLMOrchestrator:
             console.error(f"DGX launch failed: {e}")
             return False
 
+    def stop_uva(self, server_name: str, port_pattern: str = None):
+        """Cancel the Slurm job for a UVA vLLM server. Supports fuzzy port matching."""
+        servers = self.db.get("cloudmesh.ai.server", {})
+        config = servers.get(server_name, {})
+        if not config:
+            console.error(f"Server {server_name} not found in config.")
+            return False
+
+        # If a pattern is provided, we search for any job matching vllm_*pattern*
+        # Otherwise, we use the exact port from config
+        if port_pattern:
+            console.print(f"[blue]Searching for vLLM jobs matching pattern 'vllm_*{port_pattern}*'...[/blue]")
+            # List all jobs with name starting with vllm_, then grep for the pattern
+            find_job_cmd = f"ssh uva 'squeue -h -o %i,%.10n | grep vllm_ | grep {port_pattern}'"
+        else:
+            remote_port = config.get("remote_port", 8000)
+            job_name = f"vllm_{remote_port}"
+            console.print(f"[blue]Stopping vLLM server {server_name} (exact port {remote_port})...[/blue]")
+            find_job_cmd = f"ssh uva 'squeue -h -o %i -n {job_name}'"
+
+        try:
+            result = subprocess.run(find_job_cmd, shell=True, capture_output=True, text=True, check=True)
+            output = result.stdout.strip()
+            
+            if not output:
+                console.warning(f"No running jobs found matching the criteria.")
+                return False
+            
+            # Extract Job IDs (first column)
+            job_ids = []
+            for line in output.split('\n'):
+                if line:
+                    job_id = line.split()[0]
+                    job_ids.append(job_id)
+            
+            for id in job_ids:
+                console.print(f"[dim]Cancelling job {id}...[/dim]")
+                subprocess.run(f"ssh uva 'scancel {id}'", shell=True, check=True)
+            
+            console.ok(f"Successfully cancelled {len(job_ids)} job(s).")
+            return True
+            
+            if not job_id:
+                console.warning(f"No running job found with name {job_name}.")
+                return False
+            
+            # If multiple jobs are found, split by newline and cancel all
+            for id in job_id.split('\n'):
+                if id:
+                    console.print(f"[dim]Cancelling job {id}...[/dim]")
+                    subprocess.run(f"ssh uva 'scancel {id}'", shell=True, check=True)
+            
+            console.ok(f"Successfully cancelled job(s) for {job_name}.")
+            return True
+        except subprocess.CalledProcessError as e:
+            console.error(f"Failed to stop UVA server: {e}")
+            return False
+
     def launch_uva(self, server_name: str, port_override: int = None):
         """UVA HPC specific launch: Deployment -> ijob -> Tunnel -> Apptainer."""
         console.print("[bold red]DEBUG: Executing updated launch_uva logic...[/bold red]")
@@ -229,6 +287,7 @@ class VLLMOrchestrator:
                 vllm_image = f"/scratch/{remote_user}/{vllm_image or 'vllm_gemma4.sif'}"
 
             sbatch_script = f"""#!/bin/bash
+#SBATCH --job-name=vllm_{remote_port}
 #SBATCH --partition=bii-gpu
 #SBATCH --reservation=bi_fox_dgx
 #SBATCH --account=bi_dsc_community
