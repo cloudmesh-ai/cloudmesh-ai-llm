@@ -51,3 +51,4 @@ Thumbs.db
 # Tool Artifacts
 .aider.chat.history.md
 .aider.input.history
+.aider*

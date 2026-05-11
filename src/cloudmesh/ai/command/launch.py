@@ -315,31 +315,3 @@ def info_vllm():
     except Exception as e:
         console.error(f"Error listing servers: {e}")
 
-@llm_group.command(name="install")
-@click.argument("tool")
-def install_tool(tool):
-    """Install AI tools (e.g., aider)."""
-    if tool == "aider":
-        # Aider and its dependencies are most stable on Python 3.10-3.12.
-        if not (sys.version_info.major == 3 and 10 <= sys.version_info.minor <= 12):
-            console.error(f"Aider installation is most stable on Python 3.10-3.12. Current version: {sys.version.split()[0]}")
-            console.print("Python 3.13+ is causing 'AttributeError: module 'pkgutil' has no attribute 'ImpImporter'' during installation.")
-            console.print("Please use pyenv to install a compatible version: 'pyenv install 3.12.0 && pyenv local 3.12.0'")
-            return
-
-        console.print(banner("Installing Aider", "Running 'pip install aider-chat'..."))
-        try:
-            subprocess.run([sys.executable, "-m", "pip", "install", "aider-chat"], check=True)
-            console.ok("Aider installed successfully!")
-            
-            # Check for pandoc dependency
-            try:
-                subprocess.run(["pandoc", "--version"], capture_output=True, check=True)
-            except (subprocess.CalledProcessError, FileNotFoundError):
-                console.warning("Pandoc not found! Aider requires pandoc for some file conversions.")
-                if os_is_mac():
-                    console.print("Please install it using: 'brew install pandoc'")
-                else:
-                    console.print("Please install pandoc using your system package manager.")
-        except subprocess.CalledProcessError as e:
-            console.error(f"Failed to install Aider: {e}")

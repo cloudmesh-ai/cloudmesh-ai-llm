@@ -25,7 +25,12 @@ class AiderLauncher:
         # Support both uppercase and lowercase keys
         api_key = config.get("OPENAI_API_KEY") or config.get("openai_api_key")
         model = config.get("model", "google/gemma-4-31B-it")
-        base_url = config.get("OPENAI_API_BASE") or config.get("openai_api_base") or config.get("base_url", "http://127.0.0.1:8001/v1")
+        
+        # Resolve base URL: use explicit base_url if provided, otherwise construct from port
+        base_url = config.get("OPENAI_API_BASE") or config.get("openai_api_base") or config.get("base_url")
+        if not base_url:
+            port = config.get("port", 8001)
+            base_url = f"http://127.0.0.1:{port}/v1"
         
         if not api_key:
             console.error("openai_api_key not found in resolved configuration.")
@@ -45,15 +50,28 @@ class AiderLauncher:
             # Launch aider with the specified model
             subprocess.run(["aider", "--model", aider_model], env=env, check=True)
         except FileNotFoundError:
-            console.error("'aider' command not found. Please install Aider.")
+            install_guide = (
+                "Aider is not installed. Please follow these steps to install it:\n\n"
+                "1. Install pipx (if not already installed):\n"
+                "   - macOS: brew install pipx && pipx ensurepath\n"
+                "   - Linux: pip install pipx && pipx ensurepath\n\n"
+                "2. Install Aider using the Cloudmesh AI tool:\n"
+                "   cmc llm install aider\n\n"
+                "3. (Optional) Install pandoc for better document conversion:\n"
+                "   - macOS: brew install pandoc\n"
+                "   - Linux: sudo apt-get install pandoc"
+            )
+            console.error(f"'aider' command not found.\n\n{install_guide}")
         except subprocess.CalledProcessError as e:
             console.error(f"Aider exited with error: {e}")
 
     def _get_aider_model(self, model):
-        """Ensure the model has the 'openai/' prefix for litellm/aider to recognize the provider."""
-        if not any(model.startswith(p + "/") for p in ["openai", "anthropic", "google", "azure"]):
-            return f"openai/{model}"
-        return model
+        """Ensure the model has the 'openai/' prefix for litellm/aider to recognize the provider when using vLLM."""
+        # When using vLLM (OpenAI compatible), litellm requires the 'openai/' prefix 
+        # even if the model name itself contains 'google/'.
+        if model.startswith("openai/"):
+            return model
+        return f"openai/{model}"
 
     def launch_docker(self, client_config=None, force=False):
         """Launch Aider inside a Docker container to avoid Python version issues."""

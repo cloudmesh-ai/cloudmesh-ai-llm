@@ -51,9 +51,44 @@ cloudmesh:
         model: "google/gemma-4-31B-it"
 ```
 
+### 3. Client Configuration
+You can define clients (like Open WebUI or Aider) in the same `llm.yaml` file. These configurations are used when launching clients via `cmc llm launch`.
+
+```yaml
+cloudmesh:
+  ai:
+    client:
+      openwebui:
+        OPENAI_API_BASE: http://localhost:8001/v1
+        OPENAI_API_KEY: '{SERVER_MASTER_KEY}'
+        port: 3000
+        launcher: webui
+      aider:
+        OPENAI_API_BASE: http://localhost:8001/v1
+        OPENAI_API_KEY: '{SERVER_MASTER_KEY}'
+        model: openai/google/gemma-4-31B-it
+        launcher: aider
+```
+
 ---
 
 ## Workflows
+
+### Client Launchers
+The orchestrator can launch specialized AI clients that connect to your running vLLM backend.
+
+- **Open WebUI**: A full-featured web interface for interacting with your models.
+  ```bash
+  cmc llm launch openwebui
+  ```
+- **Aider**: An AI pair programming tool that works directly in your terminal and git repo.
+  ```bash
+  cmc llm launch aider
+  ```
+- **Claude CLI**: Launch Claude Code configured to use your vLLM backend.
+  ```bash
+  cmc llm launch claude
+  ```
 
 ### The UVA Pipeline
 When you run `cmc llm start gemma-uva`, the following happens:
@@ -111,7 +146,7 @@ cmc llm start gemma-uva
 | `cmc llm start <name> --export` | Exports the launch scripts and config to the current directory for editing. |
 | `cmc llm start <name> --ui` | Launches the backend and then automatically starts the Open WebUI. |
 | `cmc llm start <name> --claude` | Launches the backend and then starts Claude Code. |
-| `cmc llm launch <client>` | Launches a specialized client (e.g., `cmc llm launch aider`). |
+| `cmc llm launch <client>` | Launches a specialized client (e.g., `openwebui`, `aider`, `claude`). |
 | `cmc llm stop [ID/Name/Port]` | Stops a server using JobID, server name, or port. If no ID is provided, stops the last started server. |
 | `cmc llm info` | Lists all currently running vLLM servers on the platform. |
 | `cmc llm default server <name>` | Sets the default server for the `llm` group. |
@@ -153,3 +188,40 @@ Once the command reports "Backend is ready!", you can verify the tunnel is activ
 curl -H "Authorization: Bearer <YOUR_API_KEY>" http://localhost:18124/v1/models
 ```
 You can then point your UI or Claude Code to `http://localhost:18124/v1`.
+
+---
+
+## Appendix: Client Guides
+
+### Using Open WebUI
+Open WebUI provides a ChatGPT-like interface for your self-hosted models.
+
+1. **Ensure Backend is Running**: First, start your vLLM server (e.g., `cmc llm start gemma-uva`).
+2. **Launch the UI**:
+   ```bash
+   cmc llm launch openwebui
+   ```
+3. **Access**: The orchestrator will start a Docker container and automatically open your default browser to `http://localhost:3000`.
+4. **Configuration**: It uses the `openwebui` section in `llm.yaml` to set the API base and key.
+
+### Using Aider
+Aider is an AI pair programming tool that allows you to edit code in your local git repository using the LLM.
+
+1. **Ensure Backend is Running**: First, start your vLLM server.
+2. **Launch Aider**:
+   ```bash
+   cmc llm launch aider
+   ```
+3. **Usage**: Aider will start in your terminal. You can now ask it to implement features or fix bugs in your current directory.
+4. **Configuration**: Aider is configured via a template file (`aider.yaml`) and the `aider` section in `llm.yaml` to ensure it uses the correct model and API endpoint.
+
+### Using Claude CLI
+Claude Code is a CLI tool that provides an agentic interface for coding and system tasks.
+
+1. **Ensure Backend is Running**: First, start your vLLM server.
+2. **Launch Claude**:
+   ```bash
+   cmc llm launch claude
+   ```
+3. **Usage**: Claude will start in your terminal, connected to your vLLM backend via the configuration in `llm.yaml`.
+4. **Configuration**: It uses the `claude` section in `llm.yaml` to resolve the API base and authentication tokens.

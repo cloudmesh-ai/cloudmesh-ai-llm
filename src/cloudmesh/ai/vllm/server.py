@@ -17,7 +17,7 @@ class Server(ABC):
         """Load example configurations if the main config file is empty or does not exist."""
         if not db.data:
             self.logger.info(f"Config file {config_path} is empty or not found. Loading examples...")
-            example_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "vllm_servers_example.yaml")
+            example_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "llm.yaml")
             if os.path.exists(example_path):
                 db.load(filename=example_path)
                 db.save(filename=config_path)

@@ -3,6 +3,7 @@
 # xyz
 
 # Load Apptainer module
+source /etc/profile 2>/dev/null || true
 module load apptainer
 
 # Load tokens from config files

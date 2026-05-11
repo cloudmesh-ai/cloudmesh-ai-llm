@@ -17,6 +17,10 @@ class ClaudeLauncher:
 
     def launch(self, client_config=None):
         """Launch the claude CLI with required environment variables."""
+        console.error("Claude Code integration is currently not supported.")
+        console.print("\nAlternatives:\n- Use Aider: 'cmc llm launch aider'\n- Use Cline in VS Code")
+        return
+
         # Use resolved config from YamlDB - check both client and llm paths for compatibility
         claude_config = self.db.get("cloudmesh.ai.client.claude") or self.db.get("cloudmesh.ai.llm.claude", {})
         
@@ -52,6 +56,9 @@ class ClaudeLauncher:
             "ANTHROPIC_DEFAULT_SONNET_MODEL": config.get("ANTHROPIC_DEFAULT_SONNET_MODEL") or config.get("anthropic_default_sonnet_model", resolved_model),
             "CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS": str(config.get("CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS", 1)),
             "CLAUDE_CODE_ATTRIBUTION_HEADER": str(config.get("CLAUDE_CODE_ATTRIBUTION_HEADER", 0)),
+            # These environment variables are used to satisfy the API requirement for auto tool choice
+            "CLAUDE_CODE_ENABLE_AUTO_TOOL_CHOICE": "true",
+            "CLAUDE_CODE_TOOL_CALL_PARSER": "openai",
         })
 
         try:

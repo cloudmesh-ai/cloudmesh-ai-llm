@@ -38,12 +38,17 @@ class WebUILauncher:
         console.warning("WebUI took too long to respond. Opening browser anyway...")
         return False
 
+    def stop(self):
+        """Stop the Open WebUI container."""
+        console.print(f"[blue]Stopping Open WebUI container ({self.container_name})...[/blue]")
+        self.docker.stop_container(self.container_name)
+
     def launch(self, client_config=None):
         """Launch the Open WebUI container."""
         if not self.docker.check_docker():
             return
 
-        self.docker.stop_container(self.container_name)
+        self.stop()
 
         # Use resolved config from YamlDB
         webui_config = self.db.get("cloudmesh.ai.client.openwebui") or self.db.get("cloudmesh.ai.llm.openwebui", {})
@@ -64,28 +69,53 @@ class WebUILauncher:
 
         console.print(banner("Launching Open WebUI", f"Image: {self.image}\nPort: {self.webui_port}"))
 
-        # Construct the docker run command
-        cmd = textwrap.dedent(f"""\
-            docker run -d \\
-              -p {self.webui_port}:8080 \\
-              --add-host=host.docker.internal:host-gateway \\
-              -v open-webui:/app/backend/data \\
-              -e OPENAI_API_BASE_URL="{base_url}" \\
-              -e OPENAI_API_KEY="{api_key}" \\
-              -e VLLM_API_KEY="{api_key}" \\
-              -e HF_TOKEN="{api_key}" \\
-              -e WEBUI_NAME="{webui_name}" \\
-              --name {self.container_name} \\
-              --restart always \\
-              {self.image}
-        """).strip()
+        # To avoid putting keys in the command line (visible in docker inspect),
+        # we use a temporary env file.
+        env_file = ".openwebui.env"
+        env_content = (
+            f"OPENAI_API_BASE_URL={base_url}\n"
+            f"OPENAI_API_KEY={api_key}\n"
+            f"VLLM_API_KEY={api_key}\n"
+            f"HF_TOKEN={api_key}\n"
+            f"WEBUI_NAME={webui_name}\n"
+        )
+        
+        try:
+            with open(env_file, "w") as f:
+                f.write(env_content)
 
-        console.print(f"[blue]Executing command:[/blue]\n{cmd}")
+            # Construct the docker run command using --env-file
+            cmd = textwrap.dedent(f"""\
+                docker run -d \\
+                  -p {self.webui_port}:8080 \\
+                  --add-host=host.docker.internal:host-gateway \\
+                  -v open-webui:/app/backend/data \\
+                  --env-file {env_file} \\
+                  --name {self.container_name} \\
+                  --restart always \\
+                  {self.image}
+            """).strip()
 
-        if self.docker.run_container(cmd):
+            console.print(f"[blue]Launching Open WebUI (using env-file for security)...[/blue]")
+            
+            success = self.docker.run_container(cmd)
+        finally:
+            # Clean up the temporary env file immediately
+            if os.path.exists(env_file):
+                os.remove(env_file)
+
+        if success:
+            # Extract the port from the base_url for the success message
+            try:
+                import urllib.parse
+                parsed = urllib.parse.urlparse(base_url)
+                actual_port = parsed.port or self.local_tunnel_port
+            except Exception:
+                actual_port = self.local_tunnel_port
+
             success_msg = (
                 f"Setup Complete!\n"
-                f"1. Ensure your SSH tunnel is running (localhost:{self.local_tunnel_port} -> server).\n"
+                f"1. Ensure your SSH tunnel is running (localhost:{actual_port} -> server).\n"
                 f"2. Access the UI at: http://localhost:{self.webui_port}\n"
                 f"3. Opening the UI in your default browser in a few seconds..."
             )

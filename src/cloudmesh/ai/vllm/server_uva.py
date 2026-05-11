@@ -17,17 +17,16 @@ class ServerUVA(Server):
             self.db = db
         else:
             # Use a standard path for the vLLM server configurations
-            config_path = os.path.expanduser("~/.config/cloudmesh/ai/vllm_servers.yaml")
+            config_path = os.path.expanduser("~/.config/cloudmesh/llm.yaml")
             self.db = YamlDB(filename=config_path)
             self._load_examples_if_missing(self.db, config_path)
 
     def _get_config(self, name: str) -> dict:
-        """Retrieve configuration for a specific server name from the YAML DB."""
-        # Navigate the hierarchy: cloudmesh -> ai -> uva -> [name]
-        config = self.db.get("cloudmesh.ai.uva." + name)
-        if not config:
-            raise ValueError(f"Server configuration for '{name}' not found in YAML database under cloudmesh.ai.uva.")
-        return config
+        """Retrieve configuration for a specific server name using VLLMConfig for merging."""
+        config = VLLMConfig(self.db, name)
+        if not config.data:
+            raise ValueError(f"Server configuration for '{name}' not found in YAML database under cloudmesh.ai.server.")
+        return config.data
 
     def get_start_command(self, name: str) -> str:
         """Return the command used to start the vLLM server on UVA."""
@@ -35,7 +34,7 @@ class ServerUVA(Server):
         self._validate_config(config_dict, ['account', 'partition', 'image', 'model'])
         
         # Use VLLMConfig for the start script generator
-        config = VLLMConfig(self.db, "uva", name)
+        config = VLLMConfig(self.db, name)
         return VLLMStartScript(config).generate()
 
     def start(self, name: str, sbatch: bool = False) -> None:
@@ -47,7 +46,7 @@ class ServerUVA(Server):
         script_path = f"{working_dir}/start_{name}.sh"
         
         # Use VLLMConfig for the new helper classes
-        config = VLLMConfig(self.db, "uva", name)
+        config = VLLMConfig(self.db, name)
         
         cmd_content = VLLMStartScript(config).generate()
         self._upload_script(cmd_content, script_path)

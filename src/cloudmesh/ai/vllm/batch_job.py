@@ -48,7 +48,7 @@ class VLLMBatchJob:
         
         ijob_args = f"-p {partition}"
         if reservation:
-            ijob_args += f" -r {reservation}"
+            ijob_args += f" --reservation={reservation}"
             
         return f"ijob {ijob_args} {self.script_path}"
 
