@@ -43,10 +43,10 @@ def get_vllm_api_key(config, keys_path_override=None, lookup_key=None):
         "VLLM_API_KEY": "server_master_key.txt",
         "HF_TOKEN": "HF_token.txt",
     }
-    
+
     target_key = lookup_key or "VLLM_API_KEY"
     filename = key_file_map.get(target_key)
-    
+
     if filename:
         key_file_path = os.path.expanduser(f"~/.config/cloudmesh/llm/{filename}")
         if os.path.exists(key_file_path):
@@ -108,8 +108,6 @@ def get_server(host, db=None):
     if "uva" in host_str.lower() or "rivanna" in host_str.lower():
         return ServerUVA(host_str, db=db)
     return ServerDGX(host_str, db=db)
-
-
 
 
 class VLLMOrchestrator:
@@ -314,7 +312,7 @@ class VLLMOrchestrator:
                 servers_config = self.db.get("cloudmesh.ai.server", {})
                 if isinstance(servers_config, dict):
                     host = servers_config.get(server_name, {}).get("host", "uva")
-            
+
             jobs_data = SQueue(host=host).get_jobs()
 
             # DEBUG: Show all jobs found by SQueue to diagnose matching issues
@@ -332,7 +330,9 @@ class VLLMOrchestrator:
                 jname = job.get("name", "")
 
                 if port_pattern and port_pattern in jname:
-                    console.print(f"[dim]  Match found: job {jid} (name: {jname})[/dim]")
+                    console.print(
+                        f"[dim]  Match found: job {jid} (name: {jname})[/dim]"
+                    )
                     job_ids.append(jid)
                 elif server_name:
                     server_cfg = (
@@ -343,7 +343,9 @@ class VLLMOrchestrator:
                     remote_port = server_cfg.get("remote_port", 8000)
                     # Match if job name is exactly vllm_{port} or contains it
                     if jname == f"vllm_{remote_port}" or f"vllm_{remote_port}" in jname:
-                        console.print(f"[dim]  Match found: job {jid} (name: {jname})[/dim]")
+                        console.print(
+                            f"[dim]  Match found: job {jid} (name: {jname})[/dim]"
+                        )
                         job_ids.append(jid)
 
             if not job_ids:
@@ -526,7 +528,12 @@ PORT={remote_port} VLLM_IMAGE="{vllm_image}" bash {script_name}
             # Use stdbuf -oL to force line-buffering and tail -F to handle file creation/rotation
             tail_cmd = f'ssh uva "stdbuf -oL tail -F {remote_dir}/vllm_{remote_port}.out {remote_dir}/vllm_{remote_port}.err"'
             process = subprocess.Popen(
-                tail_cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, bufsize=1
+                tail_cmd,
+                shell=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                bufsize=1,
             )
 
             # Poll squeue to find the allocated node
@@ -665,7 +672,7 @@ PORT={remote_port} VLLM_IMAGE="{vllm_image}" bash {script_name}
             console.banner("Platform Launch")
             process = None
             launch_mode = config.get("launch_mode", "ijob")
-            
+
             if launch_mode == "sbatch":
                 if target_host == "uva":
                     result = self.launch_uva(name, port_override=port_override)
@@ -676,7 +683,9 @@ PORT={remote_port} VLLM_IMAGE="{vllm_image}" bash {script_name}
                     if not self.launch_dgx(name, port_override=port_override):
                         return False
                 else:
-                    console.error(f"sbatch launch mode requested but host {target_host} is not supported for sbatch.")
+                    console.error(
+                        f"sbatch launch mode requested but host {target_host} is not supported for sbatch."
+                    )
                     return False
             else:
                 # Default flow: Tunnel then Start (ijob)
@@ -704,6 +713,7 @@ PORT={remote_port} VLLM_IMAGE="{vllm_image}" bash {script_name}
         )
 
         # 3. Final Health Check Poll (Remote check before tunneling)
+        COUNT = 60
         if target_host == "uva" or platform == "uva":
             remote_port = port_override or config.get("remote_port", 8000)
             console.banner(f"Waiting for server startup on {node_name}:{remote_port}")
@@ -736,45 +746,62 @@ PORT={remote_port} VLLM_IMAGE="{vllm_image}" bash {script_name}
             # If not in config, we might need to find it from squeue
             if not job_id:
                 try:
-                    job_res = subprocess.run(f'ssh uva "squeue -u {remote_user} -h -o %i"', shell=True, capture_output=True, text=True)
-                    job_id = job_res.stdout.strip().split('\n')[0] if job_res.stdout.strip() else None
+                    job_res = subprocess.run(
+                        f'ssh uva "squeue -u {remote_user} -h -o %i"',
+                        shell=True,
+                        capture_output=True,
+                        text=True,
+                    )
+                    job_id = (
+                        job_res.stdout.strip().split("\n")[0]
+                        if job_res.stdout.strip()
+                        else None
+                    )
                 except Exception:
                     job_id = None
 
             success = False
-            for i in range(120):
+
+            for i in range(COUNT):
                 # 1. Stream any available logs from the vLLM process and check for success
-                if process:
-                    try:
-                        while True:
-                            line = process.stdout.readline()
-                            print(line)
-                            if not line:
-                                break
-                            print(line, end="")
-                            # Real-time detection: check if the success message is in the streamed line
-                            if any(pattern in line for pattern in ["vLLM is up and running on 0.0.0.0", "Application startup complete"]):
-                                app_ready = True
-                    except Exception:
-                        pass
+                # if process:
+                #    try:
+                #        while True:
+                #            line = process.stdout.readline()
+                #            if not line:
+                #                break
+                #            # print(line, end="")
+                #            # Real-time detection: check if the success message is in the streamed line
+                #            if any(
+                #                pattern in line
+                #                for pattern in [
+                #                    "vLLM is up and running on 0.0.0.0",
+                #                    "Application startup complete",
+                #                ]
+                #            ):
+                #                app_ready = True
+                #    except Exception:
+                #        pass
 
                 # 2. Check if port is open AND application startup is complete in logs.
                 # We run the check via the login node to avoid direct SSH authentication issues.
 
                 # Check port
                 # Use direct nc from login node to compute node to avoid nested SSH authentication issues
-                port_check_cmd = f'ssh uva "nc -z {node_name} {remote_port}"'
-                print(port_check_cmd)
-                port_res = subprocess.run(port_check_cmd, shell=True, capture_output=True)
+                port_check_cmd = f'ssh -q uva "nc -z {node_name} {remote_port}"'
+                port_res = subprocess.run(
+                    port_check_cmd, shell=True, capture_output=True
+                )
                 port_open = port_res.returncode == 0
 
                 # Check health endpoint via curl with API key if available
                 # Use -f to ensure non-2xx responses return a non-zero exit code
-                health_check_cmd = f'ssh uva "curl -s -f {auth_header} http://{node_name}:{remote_port}/health"'
-                print(health_check_cmd)
-                console.print(f"[dim]Executing health check: {health_check_cmd}[/dim]")
-                health_res = subprocess.run(health_check_cmd, shell=True, capture_output=True, text=True)
-                
+                health_check_cmd = f'ssh -q uva "curl -s -f {auth_header} http://{node_name}:{remote_port}/health"'
+                # console.print(f"[dim]Executing health check: {health_check_cmd}[/dim]")
+                health_res = subprocess.run(
+                    health_check_cmd, shell=True, capture_output=True, text=True
+                )
+
                 # Consider it ready if the curl command succeeded (HTTP 200)
                 app_ready = health_res.returncode == 0
 
@@ -784,19 +811,16 @@ PORT={remote_port} VLLM_IMAGE="{vllm_image}" bash {script_name}
                     # We check for multiple possible success patterns
                     log_patterns = [
                         "vLLM is up and running on 0.0.0.0",
-                        "Application startup complete"
+                        "Application startup complete",
                     ]
                     # Create a regex pattern that matches any of the success strings
                     pattern_regex = "|".join(log_patterns)
-                    log_check_cmd = f'ssh uva "grep -E -q \'{pattern_regex}\' {remote_dir}/vllm_{remote_port}.out {remote_dir}/vllm_{remote_port}.err 2>/dev/null"'
-                    
-                    print(log_check_cmd)
-
+                    log_check_cmd = f"ssh -q uva \"grep -E -q '{pattern_regex}' {remote_dir}/vllm_{remote_port}.out {remote_dir}/vllm_{remote_port}.err 2>/dev/null\""
                     log_res = subprocess.run(log_check_cmd, shell=True)
                     if log_res.returncode == 0:
                         app_ready = True
 
-                if i % 10 == 0: # Log every 50s to avoid flooding
+                if i % 10 == 0:  # Log every 50s to avoid flooding
                     debug_msg = f"[dim]Debug: port_open={port_open}, app_ready={app_ready} (Response: {health_res.stdout.strip()[:50]})[/dim]"
                     console.print(debug_msg)
 
@@ -805,25 +829,33 @@ PORT={remote_port} VLLM_IMAGE="{vllm_image}" bash {script_name}
                     break
 
                 console.print(
-                    f"A- Waiting for model to load on remote... ({i+1}/120)"
+                    f"A- Waiting for model to load on remote... ({i+1}/{COUNT})",
+                    end="\r",
                 )
                 time.sleep(5)
 
             if success:
                 # Establish tunnel only after the server is confirmed healthy
                 local_port = port_override or config.get("local_port", 8000)
-                
+
                 # Check if tunnel is already running to avoid duplicates
                 port_in_use = False
                 try:
-                    check_port = subprocess.run(f"lsof -t -iTCP:{local_port} -sTCP:LISTEN", shell=True, capture_output=True, text=True)
+                    check_port = subprocess.run(
+                        f"lsof -t -iTCP:{local_port} -sTCP:LISTEN",
+                        shell=True,
+                        capture_output=True,
+                        text=True,
+                    )
                     if check_port.stdout.strip():
                         port_in_use = True
                 except Exception:
                     pass
-                
+
                 if not port_in_use:
-                    console.print(f"[blue]Server is healthy. Establishing tunnel to {node_name}...[/blue]")
+                    console.print(
+                        f"[blue]Server is healthy. Establishing tunnel to {node_name}...[/blue]"
+                    )
                     self._kill_port_process(local_port)
                     tunnel_cmd = f"ssh -L {local_port}:{node_name}:{remote_port} uva -N"
                     subprocess.Popen(tunnel_cmd, shell=True)
@@ -851,11 +883,13 @@ PORT={remote_port} VLLM_IMAGE="{vllm_image}" bash {script_name}
         else:
             # Existing health check for other platforms (which already have tunnels or are local)
             console.print("[blue]Verifying model health...[/blue]")
-            for i in range(120):
+            for i in range(COUNT):
                 if client.is_alive():
                     console.ok("vLLM server is now ALIVE and model is loaded!")
                     return True
-                console.print(f"B - Waiting for model to load... ({i+1}/120)", end="\r")
+                console.print(
+                    f"B - Waiting for model to load... ({i+1}/{COUNT})", end="\r"
+                )
                 time.sleep(5)
 
             console.error("vLLM server failed to become healthy within 10 minutes.")
