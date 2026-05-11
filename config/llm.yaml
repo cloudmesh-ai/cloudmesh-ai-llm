@@ -1,0 +1,186 @@
+cloudmesh:
+  ai:
+    server:
+      uva:
+        gemma-4-31b:
+          launch_mode: sbatch
+          account: "bii_dsc_community"
+          partition: "bii-gpu"
+          reservation: "bi_fox_dgx"
+          gres: "gpu:a100:4"
+          cpus: 4
+          mem: "64G"
+          image: "/scratch/thf2bn/vllm_gemma4.sif"
+          model: "google/gemma-4-31B-it"
+          tensor_parallel_size: 4
+          gpu_memory_utilization: 0.90
+          max_model_len: 32768
+          cache_dir: "/scratch/$USER/hf_cache"
+          key_dir: "$HOME/gemma"
+          host: "uva"
+          user: '{~/.ssh/config:uva.user}'
+
+        gemma-4-9b:
+          launch_mode: sbatch
+          account: "bii_dsc_community"
+          partition: "bii-gpu"
+          gres: "gpu:a100:1"
+          cpus: 2
+          mem: "32G"
+          image: "/scratch/thf2bn/vllm_gemma9.sif"
+          model: "google/gemma-4-9B-it"
+          tensor_parallel_size: 1
+          gpu_memory_utilization: 0.90
+          max_model_len: 16384
+          cache_dir: "/scratch/$USER/hf_cache"
+          key_dir: "$HOME/gemma"
+          host: "uva"
+          user: '{~/.ssh/config:uva.user}'
+
+        gemma-4:
+          launch_mode: sbatch
+          account: "bii_dsc_community"
+          partition: "bii-gpu"
+          gres: "gpu:a100:4"
+          cpus: 4
+          mem: "64G"
+          image: "/scratch/thf2bn/vllm_gemma4.sif"
+          model: "google/gemma-4-31B-it"
+          tensor_parallel_size: 4
+          gpu_memory_utilization: 0.90
+          max_model_len: 32768
+          cache_dir: "/scratch/$USER/hf_cache"
+          key_dir: "$HOME/gemma"
+          host: "uva"
+          user: '{~/.ssh/config:uva.user}'
+
+        coder-qwen:
+          launch_mode: sbatch
+          account: "bii_dsc_community"
+          partition: "bii-gpu"
+          reservation: "bi_fox_dgx"
+          gres: "gpu:a100:4"
+          cpus: 4
+          mem: "64G"
+          image: "/scratch/thf2bn/vllm_qwen_coder.sif"
+          model: "Qwen/Qwen2.5-Coder-70B-Instruct"
+          tensor_parallel_size: 4
+          gpu_memory_utilization: 0.90
+          max_model_len: 32768
+          cache_dir: "/scratch/$USER/hf_cache"
+          key_dir: "$HOME/gemma"
+          host: "uva"
+          user: '{~/.ssh/config:uva.user}'
+
+        plan-mode:
+          launch_mode: sbatch
+          account: "bii_dsc_community"
+          partition: "bii-gpu"
+          reservation: "bi_fox_dgx"
+          gres: "gpu:a100:4"
+          cpus: 4
+          mem: "64G"
+          image: "/scratch/thf2bn/vllm_deepseek_r1.sif"
+          model: "deepseek-ai/DeepSeek-R1"
+          tensor_parallel_size: 4
+          gpu_memory_utilization: 0.90
+          max_model_len: 32768
+          cache_dir: "/scratch/$USER/hf_cache"
+          key_dir: "$HOME/gemma"
+          host: "uva"
+          user: '{~/.ssh/config:uva.user}'
+
+        gemma:
+          launch_mode: sbatch
+          account: "bii_dsc_community"
+          partition: "bii-gpu"
+          reservation: "bi_fox_dgx"
+          gres: "gpu:a100:4"
+          cpus: 4
+          mem: "64G"
+          image: "/scratch/thf2bn/vllm_gemma4.sif"
+          model: "google/gemma-4-31B-it"
+          tensor_parallel_size: 4
+          gpu_memory_utilization: 0.90
+          max_model_len: 32768
+          cache_dir: "/scratch/$USER/hf_cache"
+          key_dir: "$HOME/gemma"
+          host: "uva"
+          local_port: 18123
+          remote_port: 18123
+          user: '{~/.ssh/config:uva.user}'
+
+        qwen:
+          launch_mode: sbatch
+          account: "bii_dsc_community"
+          partition: "bii-gpu"
+          reservation: "bi_fox_dgx"
+          gres: "gpu:a100:4"
+          cpus: 4
+          mem: "64G"
+          image: "/scratch/thf2bn/vllm_qwen_coder.sif"
+          model: "Qwen/Qwen2.5-Coder-70B-Instruct"
+          tensor_parallel_size: 4
+          gpu_memory_utilization: 0.90
+          max_model_len: 32768
+          cache_dir: "/scratch/$USER/hf_cache"
+          key_dir: "$HOME/gemma"
+          host: "uva"
+          local_port: 18125
+          remote_port: 18125
+          user: '{~/.ssh/config:uva.user}'
+
+        deepseek:
+          launch_mode: sbatch
+          account: "bii_dsc_community"
+          partition: "bii-gpu"
+          reservation: "bi_fox_dgx"
+          gres: "gpu:a100:4"
+          cpus: 4
+          mem: "64G"
+          image: "/scratch/thf2bn/vllm_deepseek_r1.sif"
+          model: "deepseek-ai/DeepSeek-R1"
+          tensor_parallel_size: 4
+          gpu_memory_utilization: 0.90
+          max_model_len: 32768
+          cache_dir: "/scratch/$USER/hf_cache"
+          key_dir: "$HOME/gemma"
+          host: "uva"
+          local_port: 18126
+          remote_port: 18126
+          user: '{~/.ssh/config:uva.user}'
+
+      dgx:
+        gemma-4-31b:
+          launch_mode: sbatch
+          image: "vllm/vllm-openai:gemma4-cu130"
+          model: "google/gemma-4-31B-it"
+          tensor_parallel_size: 4
+          gpu_memory_utilization: 0.90
+          max_model_len: 32768
+          cache_dir: "/home/$USER/.cache/huggingface"
+          key_dir: "$HOME/.config/cloudmesh/ai/keys"
+          host: "dgx"
+
+    client:
+      aider:
+        OPENAI_API_BASE: http://localhost:8001/v1
+        OPENAI_API_KEY: '{SERVER_MASTER_KEY}'
+        launcher: aider
+        model: openai/google/gemma-4-31B-it
+      claude:
+        ANTHROPIC_AUTH_TOKEN: '{SERVER_MASTER_KEY}'
+        ANTHROPIC_DEFAULT_HAIKU_MODEL: google/gemma-4-31B-it
+        ANTHROPIC_DEFAULT_SONNET_MODEL: google/gemma-4-31B-it
+        ANTHROPIC_MODEL: google/gemma-4-31B-it
+        CLAUDE_CODE_ATTRIBUTION_HEADER: 0
+        CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS: 1
+        OPENAI_API_BASE: http://localhost:8001/v1
+        OPENAI_API_KEY: '{SERVER_MASTER_KEY}'
+        launcher: claude
+      openwebui:
+        OPENAI_API_BASE: http://localhost:8001/v1
+        OPENAI_API_KEY: '{SERVER_MASTER_KEY}'
+        host: localhost
+        launcher: webui
+        port: 3000

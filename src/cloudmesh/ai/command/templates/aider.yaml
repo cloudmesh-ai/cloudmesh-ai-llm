@@ -1,0 +1,6 @@
+cloudmesh:
+  ai:
+    aider:
+      model: "google/gemma-4-31B-it"
+      key_file: "~/.config/cloudmesh/llm/server_master_key.txt"
+      url: "http://localhost:8000/v1"
