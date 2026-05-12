@@ -82,35 +82,60 @@ cloudmesh:
           mem: "64G"
           image: "/scratch/thf2bn/vllm_deepseek_r1.sif"
           model: "deepseek-ai/DeepSeek-R1"
-          tensor_parallel_size: 4
-          gpu_memory_utilization: 0.90
-          max_model_len: 32768
+          extra_args: |
+            --tensor-parallel-size 4
+            --gpu-memory-utilization 0.90
+            --max-model-len 32768
+            --max-num-batched-tokens 32768
+            --enforce-eager
+            --trust-remote-code
+            --enable-chunked-prefill
+            --host 0.0.0.0
           cache_dir: "/scratch/$USER/hf_cache"
           key_dir: "$HOME/gemma"
           host: "uva"
           user: '{~/.ssh/config:uva.user}'
 
         gemma:
+          name: "vllm_gemma_{remote_port}"
           launch_mode: sbatch
           account: "bii_dsc_community"
           partition: "bii-gpu"
           reservation: "bi_fox_dgx"
           gres: "gpu:a100:4"
           cpus: 4
+          gpus: 4
           mem: "64G"
           image: "/scratch/thf2bn/vllm_gemma4.sif"
           model: "google/gemma-4-31B-it"
-          tensor_parallel_size: 4
-          gpu_memory_utilization: 0.90
-          max_model_len: 32768
-          cache_dir: "/scratch/$USER/hf_cache"
+          cache_dir: "/scratch/{user}/hf_cache"
           key_dir: "$HOME/gemma"
           host: "uva"
           local_port: 18123
           remote_port: 18123
           user: '{~/.ssh/config:uva.user}'
-
+          shell: /bin/bash
+          script: |
+            export HF_TOKEN=$(cat $HOME/.config/cloudmesh/llm/HF_token.txt)
+            export VLLM_API_KEY=$(cat $HOME/.config/cloudmesh/llm/server_master_key.txt)
+            cd /scratch/{user}
+            module load apptainer
+            apptainer run --nv \
+              -B {cache_dir}:/root/.cache/huggingface \
+              --env HF_TOKEN="${HF_TOKEN}" \
+              --env VLLM_API_KEY="${VLLM_API_KEY}" \
+              {image} \
+              --model {model} \
+              --tensor-parallel-size {gpus} \
+              --gpu-memory-utilization 0.85 \
+              --max-model-len 131072 \
+              --enable-prefix-caching \
+              --load-format safetensors \
+              --tool-call-parser gemma4 \
+              --host 0.0.0.0 \
+              --port {remote_port}
         qwen:
+          name: "vllm_qwen_{remote_port}"
           launch_mode: sbatch
           account: "bii_dsc_community"
           partition: "bii-gpu"
@@ -131,6 +156,7 @@ cloudmesh:
           user: '{~/.ssh/config:uva.user}'
 
         deepseek:
+          name: "vllm_deepseek_{remote_port}"
           launch_mode: sbatch
           account: "bii_dsc_community"
           partition: "bii-gpu"
@@ -139,10 +165,16 @@ cloudmesh:
           cpus: 4
           mem: "64G"
           image: "/scratch/thf2bn/vllm_deepseek_r1.sif"
-          model: "deepseek-ai/DeepSeek-R1"
-          tensor_parallel_size: 4
-          gpu_memory_utilization: 0.90
-          max_model_len: 32768
+          model: "deepseek-ai/DeepSeek-R1-Distill-Llama-70B"
+          extra_args: |
+            --tensor-parallel-size 4
+            --gpu-memory-utilization 0.90
+            --max-model-len 32768
+            --max-num-batched-tokens 32768
+            --enforce-eager
+            --trust-remote-code
+            --enable-chunked-prefill
+            --host 0.0.0.0
           cache_dir: "/scratch/$USER/hf_cache"
           key_dir: "$HOME/gemma"
           host: "uva"
@@ -161,6 +193,24 @@ cloudmesh:
           cache_dir: "/home/$USER/.cache/huggingface"
           key_dir: "$HOME/.config/cloudmesh/ai/keys"
           host: "dgx"
+          script: |
+            HF_TOKEN=$(cat ../server_master_key.txt) 
+            VLLM_API_KEY=$(cat ../server_master_key.txt)
+
+            # Optimized Docker Run
+            docker run --gpus '"device=0,1"' \
+              --shm-size 16gb \
+              -v ~/.cache/huggingface:/root/.cache/huggingface \
+              -p 127.0.0.1:8000:8000 \
+              -e HF_TOKEN="${HF_TOKEN}" \
+              -e VLLM_API_KEY="${VLLM_API_KEY}" \
+              vllm/vllm-openai:gemma4-cu130 \
+              --model google/gemma-4-31B-it \
+              --tensor-parallel-size 2 \
+              --gpu-memory-utilization 0.90 \
+              --max-model-len 65536 \
+              --enable-prefix-caching \
+              --load-format safetensors
 
     client:
       aider:

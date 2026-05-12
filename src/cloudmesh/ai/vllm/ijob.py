@@ -12,7 +12,7 @@ class IJob:
     def get(self, group, name):
         """Reads the needed info from the yaml file."""
         self.name = name
-        self.config = VLLMConfig(self.db, group, name)
+        self.config = VLLMConfig()
         return self
 
     def username(self):
@@ -60,4 +60,4 @@ class IJob:
 
     def yaml(self):
         """Returns all the data from the yaml file."""
-        return self.config.data
+        return self.config

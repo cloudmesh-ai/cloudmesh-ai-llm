@@ -11,18 +11,16 @@ class TestVLLMImprovements(unittest.TestCase):
     def test_dynamic_defaulting(self):
         """Test that the first server in the list is used as default if none is set."""
         from cloudmesh.ai.command.vllm import get_default_host
-        from yamldb import YamlDB
+        from cloudmesh.ai.common import DotDict
         
-        # Mock YamlDB
-        mock_db = MagicMock(spec=YamlDB)
-        # No default server set
-        mock_db.get.side_effect = lambda key, default=None: {
+        # Mock the database using DotDict
+        mock_db = DotDict({
             "cloudmesh.ai.default.server": None,
             "cloudmesh.ai.server": {
                 "server1": {"host": "host1"},
                 "server2": {"host": "host2"}
             }
-        }.get(key, default)
+        })
         
         host = get_default_host(db=mock_db)
         self.assertEqual(host, "host1")

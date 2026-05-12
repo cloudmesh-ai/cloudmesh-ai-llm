@@ -1,11 +1,13 @@
 import os
 import re
 import shutil
+import textwrap
 import subprocess
 import time
 import yaml
+import importlib.resources
 from pathlib import Path
-from yamldb import YamlDB
+from cloudmesh.ai.common import DotDict
 from cloudmesh.ai.common import banner
 from cloudmesh.ai.common.io import console
 from cloudmesh.ai.common.stopwatch import StopWatch
@@ -80,26 +82,26 @@ def get_default_host(db=None):
     """Retrieve the default host by resolving the default server name."""
     if db is None:
         config_path = os.path.expanduser("~/.config/cloudmesh/llm.yaml")
-        db = YamlDB(filename=config_path)
+        if os.path.exists(config_path):
+            with open(config_path, "r") as f:
+                db = DotDict(yaml.safe_load(f) or {})
+        else:
+            db = DotDict()
 
-    # 1. Get the default server name
     default_server_name = db.get("cloudmesh.ai.default.server")
 
-    # 2. Get all configured servers
+    # Get all servers to find a fallback if no default is set
     servers = db.get("cloudmesh.ai.server", {})
     if not isinstance(servers, dict) or not servers:
         return None
 
-    # 3. If no explicit default is set, use the first server in the list
     if not default_server_name:
         default_server_name = next(iter(servers))
 
-    # 4. Resolve the host for the determined server
-    host = servers.get(default_server_name, {}).get("host")
-    if host:
-        return host
-
-    return None
+    try:
+        return VLLMConfig(default_server_name, db=db).get("host")
+    except Exception:
+        return None
 
 
 def get_server(host, db=None):
@@ -114,10 +116,9 @@ class VLLMOrchestrator:
     """Orchestrates the full pipeline from server start to client launch."""
 
     def __init__(self):
-        self.config_path = os.path.expanduser("~/.config/cloudmesh/llm.yaml")
-        # Use :memory: backend to avoid writing back changes to the config file
-        self.db = YamlDB(filename=self.config_path, backend=":memory:")
-        self.template_dir = Path(__file__).parent / "templates"
+        self.config = VLLMConfig()
+        self.template_dir = Path(__file__).parent / "configuration" / "templates"
+        self.server_config = {}
 
     def _kill_port_process(self, port: int):
         """Kill any process currently binding to the specified local port."""
@@ -137,41 +138,14 @@ class VLLMOrchestrator:
         except Exception as e:
             console.warning(f"Could not kill process on port {port}: {e}")
 
-    def _get_remote_user(self, host: str) -> str:
-        """Resolve the remote username from ~/.ssh/config for a given host."""
-        ssh_config = os.path.expanduser("~/.ssh/config")
-        if os.path.exists(ssh_config):
-            try:
-                with open(ssh_config, "r") as f:
-                    content = f.read()
-                    # Look for the Host block that matches the target host
-                    # This is a simple parser; it looks for 'Host <host>' followed by 'User <user>'
-                    pattern = rf"Host\s+.*{re.escape(host)}.*?\n(.*?)\n\s*Host"
-                    match = re.search(pattern, content, re.DOTALL | re.IGNORECASE)
-                    if not match:
-                        # Try matching the last block if no subsequent Host is found
-                        pattern = rf"Host\s+.*{re.escape(host)}.*?\n(.*)"
-                        match = re.search(pattern, content, re.DOTALL | re.IGNORECASE)
-
-                    if match:
-                        block = match.group(1)
-                        user_match = re.search(
-                            r"^\s*User\s+(\S+)", block, re.MULTILINE | re.IGNORECASE
-                        )
-                        if user_match:
-                            return user_match.group(1)
-            except Exception:
-                pass
-        return os.environ.get("USER", "user")
-
     def export_scripts(self, server_name: str, destination: str = "."):
         """Export launch scripts to a local directory for customization."""
-        servers = self.db.get("cloudmesh.ai.server", {})
-        if not isinstance(servers, dict) or server_name not in servers:
+        server_config = self.config.get_server(server_name)
+        if not server_config:
             console.error(f"Server {server_name} not found in config.")
             return False
 
-        platform = servers[server_name].get("platform", "default")
+        platform = server_config.get("platform", "default")
         dest_path = Path(destination)
         dest_path.mkdir(parents=True, exist_ok=True)
 
@@ -193,58 +167,88 @@ class VLLMOrchestrator:
         # Export the resolved config as yaml
         config_file = dest_path / f"{server_name}_config.yaml"
         with open(config_file, "w") as f:
-            yaml.dump(servers[server_name], f)
+            # Use the .yaml_data property for the server-specific expanded config
+            # Note: yaml_data is a property of VLLMConfig, not DotDict.
+            # We use the global config to get the expanded data for this server.
+            print(self.config.yaml_data, file=f)
         console.ok(f"Exported config to {config_file}")
         return True
 
+    def get_resolved_script(self, script_name: str) -> str:
+        """Retrieve and resolve the script content, ensuring a correct shebang."""
+        config = self.server_config
+        script_content = config.get("script")
+
+        if not script_content:
+            # Fallback to template
+            script_path = self.template_dir / script_name
+            if script_path.exists():
+                script_content = script_path.read_text()
+
+        if not script_content:
+            return None
+
+        # Ensure shebang is present and uses the configured shell
+        shell = config.get("shell", "/bin/bash")
+        if not script_content.startswith("#!"):
+            script_content = f"#!{shell}\n{script_content}"
+        elif not script_content.startswith(f"#!{shell}"):
+            # Replace existing shebang if it differs from configured shell
+            script_content = re.sub(r"^#!.*", f"#!{shell}", script_content)
+
+        return script_content
+
     def launch_dgx(self, server_name: str, port_override: int = None):
         """DGX specific launch: Upload and run script on remote host."""
-        config = VLLMConfig(self.db, server_name).data
+        config = self.server_config
+        if not config:
+            console.error(
+                f"Configuration not initialized for {server_name}. Call prepare_backend first."
+            )
+            return False
         target_host = config.get("host")
 
-        # Use explicit user from config if provided, otherwise resolve from ssh config
-        remote_user = config.get("user")
-        # Support placeholders: {~/.ssh.config.host.user} or {~/.ssh/config:host.user}
-        is_placeholder = (
-            not remote_user
-            or remote_user == f"{{~/.ssh.config.{target_host}.user}}"
-            or remote_user == f"{{~/.ssh/config:{target_host}.user}}"
-        )
-        if is_placeholder:
-            remote_user = self._get_remote_user(target_host)
-
         remote_port = port_override or config.get("remote_port", 8000)
-        remote_dir = config.get(
-            "dir", f"/raid/{remote_user}/cloudmesh/vllm_{remote_port}"
+        # Use the global config to resolve the path
+        remote_dir = self.config.resolve_path(
+            "dir", f"/raid/{{user}}/cloudmesh/vllm_{{port}}"
         )
-        if remote_dir:
-            if "{user}" in remote_dir:
-                remote_dir = remote_dir.replace("{user}", remote_user)
-            if "{port}" in remote_dir:
-                remote_dir = remote_dir.replace("{port}", str(remote_port))
 
         script_name = "start_dgx.sh"
+        script_content = self.get_resolved_script(script_name)
 
-        # Handle port override
-        remote_port = port_override or config.get("remote_port", 8000)
-        # We need to pass the port to the script.
-        # Since start_dgx.sh uses environment variables or defaults,
-        # we will pass it as an environment variable to the bash command.
-        local_script = Path(".").joinpath(script_name)
-        script_path = (
-            local_script if local_script.exists() else self.template_dir / script_name
-        )
+        if script_content:
+            console.banner(f"Script to be deployed: {script_name}")
+            console.print(f"\n{script_content}\n")
+            if not console.ynchoice("Is the script content correct?"):
+                console.print("Script content rejected by user.")
+                return False
+        else:
+            console.error(f"No script content found for {script_name}")
+            return False
 
         console.print(
             f"[blue]Deploying {script_name} to {target_host}:{remote_dir}...[/blue]"
         )
         try:
-            # Create remote directory and upload script
+            # Create remote directory
             subprocess.run(
                 f"ssh {target_host} 'mkdir -p {remote_dir}'", shell=True, check=True
             )
+            # Upload resolved content using scp
+            temp_script = Path(f"temp_{script_name}")
+            temp_script.write_text(script_content)
+            try:
+                subprocess.run(
+                    f"scp {temp_script} {target_host}:{remote_dir}/{script_name}",
+                    shell=True,
+                    check=True,
+                )
+            finally:
+                if temp_script.exists():
+                    temp_script.unlink()
             subprocess.run(
-                f"scp {script_path} {target_host}:{remote_dir}/{script_name}",
+                f"ssh {target_host} 'chmod +x {remote_dir}/{script_name}'",
                 shell=True,
                 check=True,
             )
@@ -263,9 +267,10 @@ class VLLMOrchestrator:
         self, server_name: str = None, port_pattern: str = None, job_id: str = None
     ):
         """Cancel the Slurm job for a UVA vLLM server. Supports JobID, fuzzy port, or config port."""
+        sq = SQueue()
         if job_id:
             console.print(f"[blue]Stopping job {job_id}...[/blue]")
-            if SQueue().cancel(job_id):
+            if sq.cancel(job_id):
                 console.ok(f"Successfully cancelled job {job_id}.")
                 return True
             else:
@@ -277,26 +282,18 @@ class VLLMOrchestrator:
                 f"[blue]Searching for vLLM jobs matching port pattern '{port_pattern}'...[/blue]"
             )
         elif server_name:
-            servers = self.db.get("cloudmesh.ai.server", {})
-            config = servers.get(server_name, {})
-            if not config:
-                console.error(f"Server {server_name} not found in config.")
-                return False
-
-            # Try persisted job_id first
-            persisted_job = config.get("job_id")
+            persisted_job = self.config.get("job_id")
             if persisted_job:
                 console.print(
                     f"[blue]Stopping persisted job {persisted_job} for {server_name}...[/blue]"
                 )
-                if SQueue().cancel(persisted_job):
+                if sq.cancel(persisted_job):
                     console.ok(f"Successfully cancelled job {persisted_job}.")
                     return True
                 else:
                     console.error(f"Failed to cancel persisted job {persisted_job}.")
-                    # Fall through to search by name if persisted ID fails
 
-            remote_port = config.get("remote_port", 8000)
+            remote_port = self.config.get("remote_port", 8000)
             console.print(
                 f"[blue]Searching for jobs associated with {server_name} (port {remote_port})...[/blue]"
             )
@@ -305,15 +302,12 @@ class VLLMOrchestrator:
             return False
 
         try:
-            # Use the SQueue wrapper for robust data retrieval
-            # Use the host from the server config if available, otherwise default to 'uva'
             host = "uva"
             if server_name:
-                servers_config = self.db.get("cloudmesh.ai.server", {})
-                if isinstance(servers_config, dict):
-                    host = servers_config.get(server_name, {}).get("host", "uva")
+                host = self.config.get("host", "uva")
 
-            jobs_data = SQueue(host=host).get_jobs()
+            sq = SQueue(host=host)
+            jobs_data = sq.get_jobs()
 
             # DEBUG: Show all jobs found by SQueue to diagnose matching issues
             if jobs_data:
@@ -324,7 +318,9 @@ class VLLMOrchestrator:
                 console.print("[dim]SQueue returned no jobs.[/dim]")
 
             job_ids = []
-            servers_config = self.db.get("cloudmesh.ai.server", {})
+            # We need the full server list to match jobs to server names
+            # VLLMConfig doesn't provide a list of all servers, so we use the config for the loop
+            servers_config = self.config.get("cloudmesh.ai.server", {})
             for job in jobs_data:
                 jid = job.get("job_id")
                 jname = job.get("name", "")
@@ -335,14 +331,13 @@ class VLLMOrchestrator:
                     )
                     job_ids.append(jid)
                 elif server_name:
-                    server_cfg = (
-                        servers_config.get(server_name, {})
-                        if isinstance(servers_config, dict)
-                        else {}
-                    )
-                    remote_port = server_cfg.get("remote_port", 8000)
-                    # Match if job name is exactly vllm_{port} or contains it
-                    if jname == f"vllm_{remote_port}" or f"vllm_{remote_port}" in jname:
+                    # Use VLLMConfig to resolve the specific server we are looking for
+                    remote_port = self.config.get("remote_port", 8000)
+
+                    # Note: get_job_name is a method of VLLMOrchestrator
+                    job_name = self.get_job_name(self.config, remote_port)
+                    # Match if job name is exactly the resolved name or contains it
+                    if jname == job_name or job_name in jname:
                         console.print(
                             f"[dim]  Match found: job {jid} (name: {jname})[/dim]"
                         )
@@ -352,13 +347,9 @@ class VLLMOrchestrator:
                 console.warning(f"No running jobs found matching the criteria.")
                 return False
 
-            if not job_ids:
-                console.warning(f"No running jobs found matching the criteria.")
-                return False
-
             for id in job_ids:
                 console.print(f"[dim]Cancelling job {id}...[/dim]")
-                SQueue(host=host).cancel(id)
+                sq.cancel(id)
 
             console.ok(f"Successfully cancelled {len(job_ids)} job(s).")
             return True
@@ -370,14 +361,14 @@ class VLLMOrchestrator:
         """List all running vLLM servers on UVA."""
         console.banner("Running vLLM Servers")
         try:
-            # Use the SQueue wrapper for robust data retrieval
-            jobs_data = SQueue().get_jobs()
+            sq = SQueue()
+            jobs_data = sq.get_jobs()
 
             if not jobs_data:
                 console.warning("No running vLLM servers found on UVA.")
                 return []
 
-            servers_config = self.db.get("cloudmesh.ai.server", {})
+            servers_config = self.config.get("cloudmesh.ai.server", {})
             running_jobs = []
 
             for job in jobs_data:
@@ -392,17 +383,23 @@ class VLLMOrchestrator:
                 if "vllm_" not in job_name:
                     continue
 
-                # Try to find which configured server this job belongs to
                 server_name = "Unknown"
                 port = "Unknown"
                 if isinstance(servers_config, dict):
-                    for name, cfg in servers_config.items():
+                    for name in servers_config:
+                        # Use the specific server config for the port and job name
+                        server_cfg = self.config.get_server(name)
+                        remote_port = (
+                            server_cfg.get("remote_port", 8000) if server_cfg else 8000
+                        )
+                        resolved_job_name = self.get_job_name(
+                            server_cfg or self.config, remote_port
+                        )
                         if (
-                            cfg.get("job_id") == job_id
-                            or f"vllm_{cfg.get('remote_port')}" == job_name
-                        ):
+                            server_cfg and server_cfg.get("job_id") == job_id
+                        ) or resolved_job_name == job_name:
                             server_name = name
-                            port = cfg.get("remote_port", "Unknown")
+                            port = remote_port
                             break
 
                 running_jobs.append(
@@ -435,42 +432,72 @@ class VLLMOrchestrator:
         console.print(
             "[bold red]DEBUG: Executing updated launch_uva logic...[/bold red]"
         )
-        config = VLLMConfig(self.db, server_name).data
+        config = self.server_config
+        if not config:
+            console.error(
+                f"Configuration not initialized for {server_name}. Call prepare_backend first."
+            )
+            return False
 
-        # Use explicit user from config if provided, otherwise resolve from ssh config
-        remote_user = config.get("user")
-        is_placeholder = (
-            not remote_user
-            or remote_user == "{~/.ssh.config.uva.user}"
-            or remote_user == "{~/.ssh/config:uva.user}"
-        )
-        if is_placeholder:
-            remote_user = self._get_remote_user("uva")
+        remote_port = config.get("remote_port", 8000)
+        job_name = config.get("name")
+        remote_dir = config.get("dir")
 
-        remote_port = port_override or config.get("remote_port", 8000)
-        remote_dir = config.get(
-            "dir", f"/scratch/{remote_user}/cloudmesh/llm_{remote_port}"
-        )
-        if remote_dir:
-            if "{user}" in remote_dir:
-                remote_dir = remote_dir.replace("{user}", remote_user)
-            if "{port}" in remote_dir:
-                remote_dir = remote_dir.replace("{port}", str(remote_port))
+        # Debug print of the resolved config
+        console.print(f"\n[dim]DEBUG: Resolved config for {server_name}:[/dim]")
+        pretty_config = yaml.dump(config, default_flow_style=False)
+        console.print(f"[dim]{pretty_config}[/dim]")
+
+        # Confirmation prompt for job name and directory
+        console.print(f"\n[bold yellow]Configuration Verification:[/bold yellow]")
+        console.print(f"  Job Name: [green]{job_name}[/green]")
+        console.print(f"  Remote Dir: [green]{remote_dir}[/green]")
+
+        if not console.ynchoice("Proceed with these settings?"):
+            console.print("Launch aborted by user.")
+            return False
 
         try:
             # 1. Deployment (MUST happen before ijob)
             console.banner("Deployment")
             script_name = "start_uva.sh"
-            script_path = self.template_dir / script_name
+            script_content = self.get_resolved_script(script_name)
+
+            if script_content:
+                console.banner(f"Script to be deployed: {script_name}")
+                console.print(f"\n{script_content}\n")
+                if not console.ynchoice("Is the script content correct?"):
+                    console.print("Script content rejected by user.")
+                    return False
+            else:
+                console.error(f"No script content found for {script_name}")
+                return False
 
             console.print(
-                f"[blue]Deploying {script_name} from template to uva:{remote_dir}/{script_name}...[/blue]"
+                f"[blue]Deploying {script_name} to uva:{remote_dir}/{script_name}...[/blue]"
             )
-            subprocess.run(f"ssh uva 'mkdir -p {remote_dir}'", shell=True, check=True)
-            # Use absolute path for scp to avoid any ambiguity
-            scp_cmd = f"scp {script_path} uva:{remote_dir}/{script_name}"
-            console.print(f"[dim]Executing: {scp_cmd}[/dim]")
-            subprocess.run(scp_cmd, shell=True, check=True)
+            # Ensure remote directory and cache directory exist
+            cache_dir = config.get("cache_dir")
+            mkdir_cmd = f"mkdir -p {remote_dir}"
+            if cache_dir:
+                mkdir_cmd += f" && mkdir -p {cache_dir}"
+
+            subprocess.run(f"ssh uva '{mkdir_cmd}'", shell=True, check=True)
+            # Upload resolved content using scp
+            temp_script = Path(f"temp_{script_name}")
+            temp_script.write_text(script_content)
+            try:
+                subprocess.run(
+                    f"scp {temp_script} uva:{remote_dir}/{script_name}",
+                    shell=True,
+                    check=True,
+                )
+            finally:
+                if temp_script.exists():
+                    temp_script.unlink()
+            subprocess.run(
+                f"ssh uva 'chmod +x {remote_dir}/{script_name}'", shell=True, check=True
+            )
             console.ok(f"Successfully uploaded {script_name} to {remote_dir}")
 
             # 2. Allocation
@@ -478,30 +505,41 @@ class VLLMOrchestrator:
             console.print("[blue]Requesting GPU allocation via sbatch...[/blue]")
 
             # Resolve image path: from config or default to /scratch/{user}/vllm_gemma4.sif
+            remote_user = config.get("user")
             vllm_image = config.get("image")
-            if not vllm_image or not vllm_image.startswith("/"):
-                vllm_image = f"/scratch/{remote_user}/{vllm_image or 'vllm_gemma4.sif'}"
+            if not vllm_image:
+                vllm_image = f"/scratch/{remote_user}/vllm_gemma4.sif"
+            elif not vllm_image.startswith("/") and not vllm_image.startswith(
+                "docker://"
+            ):
+                # If it contains a colon, it's likely a Docker image name (e.g., vllm/vllm-openai:latest)
+                if ":" in vllm_image:
+                    vllm_image = f"docker://{vllm_image}"
+                else:
+                    # Otherwise, assume it's a local file in the user's scratch directory
+                    vllm_image = f"/scratch/{remote_user}/{vllm_image}"
 
             # Get email from config or use default
             email = config.get("email", "laszewski@gmail.com")
 
-            sbatch_script = f"""#!/bin/bash
-#SBATCH --job-name=vllm_{remote_port}
-#SBATCH --mail-user={email}
-#SBATCH --mail-type=BEGIN
-#SBATCH --partition=bii-gpu
-#SBATCH --reservation=bi_fox_dgx
-#SBATCH --account=bi_dsc_community
-#SBATCH --gpus=a100:4
-#SBATCH --cpus-per-task=32
-#SBATCH --mem=96gb
-#SBATCH --time=03:00:00
-#SBATCH --output={remote_dir}/vllm_{remote_port}.out
-#SBATCH --error={remote_dir}/vllm_{remote_port}.err
+            sbatch_script = textwrap.dedent(f"""\
+                #!/bin/bash
+                #SBATCH --job-name={job_name}
+                #SBATCH --mail-user={email}
+                #SBATCH --mail-type=BEGIN
+                #SBATCH --partition=bii-gpu
+                #SBATCH --reservation=bi_fox_dgx
+                #SBATCH --account=bi_dsc_community
+                #SBATCH --gpus=a100:4
+                #SBATCH --cpus-per-task=32
+                #SBATCH --mem=96gb
+                #SBATCH --time=03:00:00
+                #SBATCH --output={remote_dir}/{job_name}.out
+                #SBATCH --error={remote_dir}/{job_name}.err
 
-cd {remote_dir}
-PORT={remote_port} VLLM_IMAGE="{vllm_image}" bash {script_name}
-"""
+                cd {remote_dir}
+                PORT={remote_port} VLLM_IMAGE="{vllm_image}" bash {script_name}
+                """)
             sbatch_file = f"{remote_dir}/submit.sh"
             subprocess.run(
                 f"ssh uva 'echo \"{sbatch_script}\" > {sbatch_file}'",
@@ -526,7 +564,7 @@ PORT={remote_port} VLLM_IMAGE="{vllm_image}" bash {script_name}
 
             # Start a background process to tail the remote logs in real-time
             # Use stdbuf -oL to force line-buffering and tail -F to handle file creation/rotation
-            tail_cmd = f'ssh uva "stdbuf -oL tail -F {remote_dir}/vllm_{remote_port}.out {remote_dir}/vllm_{remote_port}.err"'
+            tail_cmd = f'ssh uva "stdbuf -oL tail -F {remote_dir}/{job_name}.out {remote_dir}/{job_name}.err"'
             process = subprocess.Popen(
                 tail_cmd,
                 shell=True,
@@ -555,21 +593,12 @@ PORT={remote_port} VLLM_IMAGE="{vllm_image}" bash {script_name}
                 process.terminate()
                 return False
 
-            if not node_name:
-                console.error(
-                    "Could not determine the allocated node name from output."
-                )
-                process.terminate()
-                return False
-
             console.ok(f"Allocated node: {node_name}")
 
             # Persist job and node info to config
-            servers = self.db.get("cloudmesh.ai.server", {})
-            if isinstance(servers, dict) and server_name in servers:
-                servers[server_name]["job_id"] = job_id
-                servers[server_name]["node_name"] = node_name
-                self.db.set("cloudmesh.ai.server", servers)
+            self.config["job_id"] = job_id
+            self.config["node_name"] = node_name
+            self.config.save()
 
             console.banner("Execution")
             # The server is already started by the 'ijob' command we injected.
@@ -592,31 +621,160 @@ PORT={remote_port} VLLM_IMAGE="{vllm_image}" bash {script_name}
         """Ensure vLLM server is running, tunneled, and healthy."""
         StopWatch.start("vllm_startup")
 
-        # Bypass YamlDB :memory: backend and load directly from disk to ensure fresh config
-        try:
-            with open(self.config_path, "r") as f:
-                full_config = yaml.safe_load(f) or {}
-                servers = (
-                    full_config.get("cloudmesh", {}).get("ai", {}).get("server", {})
-                )
-        except Exception as e:
-            raise ValueError(
-                f"Could not read configuration file {self.config_path}: {e}"
-            )
+        # Resolve configuration
+        resolved_config = self.config.get_server(name)
 
-        # Use VLLMConfig to check if the server exists (handles both flat and nested keys)
-        # Pass the raw servers dictionary for more reliable nested lookup
-        vllm_config = VLLMConfig(servers, name)
-        if not vllm_config.data:
+        if not resolved_config:
+            # Use the global config to get available servers for the error message
+            servers = self.config.get("cloudmesh.ai.server", {})
             available = list(servers.keys()) if isinstance(servers, dict) else []
             available_str = ", ".join(available) if available else "None"
+
             raise ValueError(
                 f"Could not resolve configuration for service '{name}'.\n"
                 f"Available servers in config: {available_str}\n"
                 f"If no servers are listed, run 'cmc launch init server <host>' first."
             )
 
-        config = vllm_config.data
+        # Expand placeholders and external references.
+        # We avoid using self.config.expand_external_references(resolved_config) because
+        # DotDict.expand uses smart_get, which can pick up values from other servers
+        # in the global config (contamination).
+
+        # 1. First, resolve external references {~path:key} using the VLLMConfig helper
+        # We do this manually to maintain control over the scope.
+        expanded_data = {}
+        for k, v in resolved_config.items():
+            if isinstance(v, str) and "{" in v and "}" in v:
+                pattern = r"\{([^}]+)\}"
+
+                def replace_ext(match):
+                    ref = match.group(1)
+                    if ":" in ref and (ref.startswith("~") or "/" in ref):
+                        return self.config._resolve_external_reference(ref)
+                    return f"{{{ref}}}"
+
+                expanded_data[k] = re.sub(pattern, replace_ext, v)
+            else:
+                expanded_data[k] = v
+
+        self.server_config = DotDict(expanded_data)
+
+        # If port_override is provided, it overrides both local and remote ports
+        if port_override:
+            if not (0 <= port_override <= 65535):
+                raise ValueError(f"Port {port_override} is out of range. Must be between 0 and 65535.")
+            self.server_config["remote_port"] = port_override
+            self.server_config["local_port"] = port_override
+
+        # Ensure 'user' is available for expansion in server_config.
+        # Prioritize server-specific user, then global config user, then system login.
+        if not self.server_config.get("user"):
+            # Try to find user in global config (could be at root or under cloudmesh.ai)
+            global_user = self.config.get("user") or self.config.get(
+                "cloudmesh.ai.user"
+            )
+
+            # If we have a global user, use it. Otherwise, fallback to system login.
+            # We use os.getlogin() as a last resort, but we'll log it.
+            if global_user:
+                self.server_config["user"] = global_user
+            else:
+                self.server_config["user"] = os.getlogin()
+                console.print(
+                    f"[dim]No user found in config, falling back to system login: {os.getlogin()}[/dim]"
+                )
+
+        # Update job_name if it contains a port and we have an override
+        current_name = self.server_config.get("name", "")
+        if port_override and current_name:
+            # Replace any port-like number at the end of the name with the override
+            # Matches _12345 at the end of the string
+            self.server_config["name"] = re.sub(
+                r"_\d+$", f"_{port_override}", current_name
+            )
+
+        # Pre-calculate remote_dir so it can be expanded in the final pass
+        # Default to a common pattern if not specified in config
+        if "dir" not in self.server_config:
+            self.server_config["dir"] = f"/scratch/{{user}}/cloudmesh/{{name}}"
+
+        # Final expansion pass: Replace all {key} placeholders in string fields.
+        # We use the built-in DotDict.expand method for robust resolution.
+        # We loop until convergence to handle nested placeholders.
+
+        config_data = self.server_config.to_dict()
+        
+        # Final expansion pass: Replace all {key} placeholders in string fields.
+        # We use a manual loop instead of DotDict.expand to avoid replacing shell variables like ${VAR}.
+        while True:
+            changed = False
+            # Combine keys from global config and local config_data for expansion
+            all_keys = list(self.config.keys())
+            for k in all_keys:
+                val = self.config.get(k)
+                if val is None:
+                    continue
+                
+                placeholder = f"{{{k}}}"
+                replacement = str(val)
+                
+                for target_key, target_val in config_data.items():
+                    if isinstance(target_val, str) and placeholder in target_val:
+                        # Only replace if it's not a shell variable ${VAR}
+                        idx = target_val.find(placeholder)
+                        if idx > 0 and target_val[idx-1] == '$':
+                            continue
+                        
+                        config_data[target_key] = target_val.replace(placeholder, replacement)
+                        changed = True
+            
+            # Also handle local placeholders within config_data
+            for k, val in config_data.items():
+                if val is None:
+                    continue
+                placeholder = f"{{{k}}}"
+                replacement = str(val)
+                for target_key, target_val in config_data.items():
+                    if isinstance(target_val, str) and placeholder in target_val:
+                        idx = target_val.find(placeholder)
+                        if idx > 0 and target_val[idx-1] == '$':
+                            continue
+                        config_data[target_key] = target_val.replace(placeholder, replacement)
+                        changed = True
+
+            if not changed:
+                break
+
+        # Special case: Expand $USER using the 'user' from the config if present.
+        # This is done after {key} expansion to ensure 'user' is fully resolved.
+        user_val = config_data.get("user")
+        if user_val:
+            for key, value in config_data.items():
+                if isinstance(value, str) and "$USER" in value:
+                    config_data[key] = value.replace("$USER", str(user_val))
+
+        # 2. Handle port override for hardcoded --port flags in scripts
+        if port_override:
+            for key, value in config_data.items():
+                if isinstance(value, str):
+                    config_data[key] = re.sub(
+                        r"--port\s+\d+", f"--port {port_override}", value
+                    )
+
+        # Update the server_config with the fully expanded values
+        self.server_config = DotDict(config_data)
+
+        # Show the expanded configuration and ask for confirmation
+        console.banner(f"Configuration Verification for {name}")
+        console.print("\n[bold yellow]Expanded Server Config:[/bold yellow]")
+        console.print(self.server_config)
+
+        if not console.ynchoice("\nProceed with this configuration?"):
+            console.print("Backend preparation aborted by user.")
+            return False
+
+        config = self.server_config
         target_host = config.get("host")
         platform = config.get("platform", "default")
 
@@ -626,7 +784,7 @@ PORT={remote_port} VLLM_IMAGE="{vllm_image}" bash {script_name}
             )
 
         server = get_server(target_host)
-        client = VLLMClient(vllm_config)
+        client = VLLMClient(self.config)
 
         console.print(
             banner(
@@ -690,7 +848,6 @@ PORT={remote_port} VLLM_IMAGE="{vllm_image}" bash {script_name}
             else:
                 # Default flow: Tunnel then Start (ijob)
                 if target_host not in ["localhost", "127.0.0.1"]:
-                    console.print("[blue]Establishing SSH tunnel...[/blue]")
                     server.tunnel(name)
 
                     if client.is_alive():
@@ -720,9 +877,14 @@ PORT={remote_port} VLLM_IMAGE="{vllm_image}" bash {script_name}
             console.print(f"[blue]Verifying model health on {node_name}...[/blue]")
             remote_port = port_override or config.get("remote_port", 8000)
 
+            # Resolve job name for directory and log checking
+            job_name = config.get("name")
+
             # Resolve remote_dir for log checking
-            remote_user = config.get("user") or self._get_remote_user(target_host)
-            remote_dir = config.get("dir", f"/scratch/{remote_user}")
+            remote_user = config.get("user")
+            remote_dir = config.get(
+                "dir", f"/scratch/{remote_user}/cloudmesh/{job_name}"
+            )
             if remote_dir:
                 remote_dir = remote_dir.replace("{user}", remote_user).replace(
                     "{port}", str(remote_port)
@@ -795,7 +957,6 @@ PORT={remote_port} VLLM_IMAGE="{vllm_image}" bash {script_name}
                 port_open = port_res.returncode == 0
 
                 # Check health endpoint via curl with API key if available
-                # Use -f to ensure non-2xx responses return a non-zero exit code
                 health_check_cmd = f'ssh -q uva "curl -s -f {auth_header} http://{node_name}:{remote_port}/health"'
                 # console.print(f"[dim]Executing health check: {health_check_cmd}[/dim]")
                 health_res = subprocess.run(
@@ -815,7 +976,9 @@ PORT={remote_port} VLLM_IMAGE="{vllm_image}" bash {script_name}
                     ]
                     # Create a regex pattern that matches any of the success strings
                     pattern_regex = "|".join(log_patterns)
-                    log_check_cmd = f"ssh -q uva \"grep -E -q '{pattern_regex}' {remote_dir}/vllm_{remote_port}.out {remote_dir}/vllm_{remote_port}.err 2>/dev/null\""
+                    # Resolve job name for log checking
+                    job_name = config.get("name")
+                    log_check_cmd = f"ssh -q uva \"grep -E -q '{pattern_regex}' {remote_dir}/{job_name}.out {remote_dir}/{job_name}.err 2>/dev/null\""
                     log_res = subprocess.run(log_check_cmd, shell=True)
                     if log_res.returncode == 0:
                         app_ready = True

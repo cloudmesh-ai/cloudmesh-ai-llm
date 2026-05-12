@@ -19,11 +19,13 @@ from cloudmesh.ai.common import banner
 from cloudmesh.ai.common.io import console
 from cloudmesh.ai.common.sys import os_is_mac
 
-from cloudmesh.ai.command.docker_manager import DockerManager
-from cloudmesh.ai.command.webui_launcher import WebUILauncher
-from cloudmesh.ai.command.claude_launcher import ClaudeLauncher
-from cloudmesh.ai.command.aider_launcher import AiderLauncher
-from cloudmesh.ai.command.orchestrator import VLLMOrchestrator, get_vllm_api_key
+from cloudmesh.ai.vllm.docker_manager import DockerManager
+from cloudmesh.ai.vllm.webui_launcher import WebUILauncher
+from cloudmesh.ai.vllm.claude_launcher import ClaudeLauncher
+from cloudmesh.ai.vllm.aider_launcher import AiderLauncher
+from cloudmesh.ai.vllm.orchestrator import VLLMOrchestrator, get_vllm_api_key, get_default_host, get_server
+from cloudmesh.ai.vllm.config import VLLMConfig
+from cloudmesh.ai.vllm.client import VLLMClient
 
 @click.group()
 def launch_group():
@@ -134,9 +136,8 @@ def config_info():
     """Print the resolved in-memory LLM configuration."""
     try:
         orchestrator = VLLMOrchestrator()
-        # YamlDB.yaml() returns the current state of self.data as YAML
-        # Since load() resolves variables and merges #load files, this is the final resolved state
-        resolved_yaml = orchestrator.db.yaml()
+        # Since orchestrator.db is now a DotDict, we use yaml.dump to get the YAML representation
+        resolved_yaml = yaml.dump(orchestrator.db, default_flow_style=False)
         
         if not resolved_yaml or resolved_yaml == "{}":
             console.warning("The in-memory configuration is empty. This may be due to a loading error or an empty config file.")

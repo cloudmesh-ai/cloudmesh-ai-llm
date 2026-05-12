@@ -2,18 +2,22 @@ import os
 import time
 import textwrap
 import urllib.request
-from yamldb import YamlDB
-from cloudmesh.ai.common import banner
+import yaml
+from cloudmesh.ai.common import banner, DotDict
 from cloudmesh.ai.common.io import console
-from cloudmesh.ai.command.docker_manager import DockerManager
+from cloudmesh.ai.vllm.docker_manager import DockerManager
 
 class WebUILauncher:
     """Handles the lifecycle of the Open WebUI Docker container."""
 
     def __init__(self):
         self.docker = DockerManager()
-        # Use YamlDB to load the resolved configuration in memory
-        self.db = YamlDB(filename=os.path.expanduser("~/.config/cloudmesh/llm.yaml"), backend=":memory:")
+        config_path = os.path.expanduser("~/.config/cloudmesh/llm.yaml")
+        if os.path.exists(config_path):
+            with open(config_path, 'r') as f:
+                self.db = DotDict(yaml.safe_load(f) or {})
+        else:
+            self.db = DotDict()
         self.container_name = "open-webui"
         self.local_tunnel_port = 8001
         self.image = "ghcr.io/open-webui/open-webui:main"
@@ -50,8 +54,10 @@ class WebUILauncher:
 
         self.stop()
 
-        # Use resolved config from YamlDB
+        # Use resolved config from DotDict
         webui_config = self.db.get("cloudmesh.ai.client.openwebui") or self.db.get("cloudmesh.ai.llm.openwebui", {})
+        if not isinstance(webui_config, dict):
+            webui_config = {}
         config = {**webui_config, **(client_config or {})}
         
         api_key = config.get("OPENAI_API_KEY") or config.get("openai_api_key")

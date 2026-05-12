@@ -17,32 +17,31 @@ def mock_creds():
 
 @pytest.fixture
 def mock_db():
-    """Mocks the YamlDB configuration."""
-    with patch("cloudmesh.ai.command.vllm.YamlDB") as mock:
-        db_instance = mock.return_value
-        # Mock the .get() method to return specific values based on the key
-        def get_side_effect(key, default=None):
-            # Base server configs
-            servers = {
-                "2": {"host": "dgx-host", "model": "gemma-2b", "image": "vllm-image"},
-                "test-server": {"host": "test-host", "model": "gemma-2b", "image": "vllm-image"},
+    """Mocks the configuration database."""
+    from cloudmesh.ai.common import DotDict
+    
+    # Use a real DotDict for the mock data
+    servers = {
+        "2": {"host": "dgx-host", "model": "gemma-2b", "image": "vllm-image"},
+        "test-server": {"host": "test-host", "model": "gemma-2b", "image": "vllm-image"},
+    }
+    
+    mock_data = DotDict({
+        "cloudmesh": {
+            "ai": {
+                "server": servers
             }
-            
-            data = {
-                "cloudmesh.ai.server": servers,
-                "cloudmesh.ai.default.server": "2",
-                "config.default_service": "2",
-            }
-            
-            # Dynamically add dgx and uva paths for the mocked servers
-            for name, config in servers.items():
-                data[f"cloudmesh.ai.dgx.{name}"] = config
-                data[f"cloudmesh.ai.uva.{name}"] = config
-                
-            return data.get(key, default)
-        
-        db_instance.get.side_effect = get_side_effect
-        yield db_instance
+        },
+        "cloudmesh.ai.default.server": "2",
+        "config.default_service": "2",
+    })
+
+    # Patch VLLMConfig to use this mock_data as its db
+    with patch("cloudmesh.ai.vllm.config.VLLMConfig.__init__", 
+               lambda self, name, db=None: setattr(self, 'db', mock_data)):
+        # We also need to mock the .get() method of VLLMConfig if it's used as a dict
+        # but VLLMConfig usually inherits from DotDict or implements __getitem__
+        yield mock_data
 
 def test_launch_success(runner, mock_creds, mock_db):
     """Test successful launch command construction."""

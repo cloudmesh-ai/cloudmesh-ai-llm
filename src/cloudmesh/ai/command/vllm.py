@@ -58,11 +58,11 @@ from rich.padding import Padding
 from cloudmesh.ai.common.io import console
 from textual.app import App, ComposeResult
 from textual.widgets import DataTable, Header, Footer
-from yamldb import YamlDB
+from cloudmesh.ai.common import DotDict
 from cloudmesh.ai.common.remote import RemoteExecutor
-from cloudmesh.ai.command.launch import AiderLauncher
-from cloudmesh.ai.command.webui_launcher import WebUILauncher
-from cloudmesh.ai.command.claude_launcher import ClaudeLauncher
+from cloudmesh.ai.vllm.aider_launcher import AiderLauncher
+from cloudmesh.ai.vllm.webui_launcher import WebUILauncher
+from cloudmesh.ai.vllm.claude_launcher import ClaudeLauncher
 from cloudmesh.ai.vllm.server_uva import ServerUVA
 from cloudmesh.ai.vllm.server_dgx import ServerDGX
 from cloudmesh.ai.vllm.batch_job import VLLMBatchJob
@@ -71,7 +71,7 @@ from cloudmesh.ai.vllm.exceptions import VLLMError, VLLMConnectionError, VLLMCon
 from cloudmesh.ai.vllm.config import VLLMConfig
 from cloudmesh.ai.vllm.client import VLLMClient
 from cloudmesh.ai.vllm.ijob import IJob
-from cloudmesh.ai.command.orchestrator import VLLMOrchestrator, get_default_host, get_server, get_vllm_api_key
+from cloudmesh.ai.vllm.orchestrator import VLLMOrchestrator, get_default_host, get_server, get_vllm_api_key
 
 class RenderVLLMTable:
     """Helper class to render vLLM configurations into a Textual DataTable."""
@@ -131,7 +131,11 @@ class VLLMServiceSelector(App):
 
 def select_vllm_service(db, group_filter=None):
     """Interactively select a vLLM service from the available configurations using Textual."""
-    servers = db.get("cloudmesh.ai.server", {})
+    # Handle both DotDict and objects with .get()
+    if hasattr(db, 'get'):
+        servers = db.get("cloudmesh.ai.server", {})
+    else:
+        servers = {}
     
     if not servers:
         console.error("No vLLM server configurations found in the config file.")
@@ -160,7 +164,7 @@ def start(name, ui, claude, info, export, port):
     try:
         if info:
             orchestrator = VLLMOrchestrator()
-            servers = orchestrator.db.get("cloudmesh.ai.server", {})
+            servers = orchestrator.config.get("cloudmesh.ai.server", {})
             config_path = orchestrator.config_path
             if isinstance(servers, dict) and name in servers:
                 config = servers[name]
@@ -195,7 +199,7 @@ def start(name, ui, claude, info, export, port):
             return
         
         # Check if the name refers to a client instead of a server
-        clients = orchestrator.db.get("cloudmesh.ai.client", {})
+        clients = orchestrator.config.get("cloudmesh.ai.client", {})
         # Recognize common clients even if not explicitly in config
         if (isinstance(clients, dict) and name in clients) or name in ["aider", "webui", "claude"]:
             client_config = clients.get(name, {}) if isinstance(clients, dict) else {}
@@ -203,7 +207,7 @@ def start(name, ui, claude, info, export, port):
             # Resolve API key if missing from config
             raw_key = client_config.get("OPENAI_API_KEY") or client_config.get("openai_api_key")
             if not raw_key:
-                api_key = get_vllm_api_key(orchestrator.db)
+                api_key = get_vllm_api_key(orchestrator.config)
                 if api_key:
                     client_config["OPENAI_API_KEY"] = api_key
             
@@ -234,16 +238,16 @@ def start(name, ui, claude, info, export, port):
             
             if ui:
                 console.print("[bold green]Launching WebUI...[/bold green]")
-                clients = orchestrator.db.get("cloudmesh.ai.client", {})
+                clients = orchestrator.config.get("cloudmesh.ai.client", {})
                 webui_cfg = clients.get("openwebui", {}) if isinstance(clients, dict) else {}
                 WebUILauncher().launch(client_config=webui_cfg)
             elif claude:
                 console.print("[bold green]Launching Claude...[/bold green]")
-                clients = orchestrator.db.get("cloudmesh.ai.client", {})
+                clients = orchestrator.config.get("cloudmesh.ai.client", {})
                 claude_cfg = clients.get("claude", {}) if isinstance(clients, dict) else {}
                 ClaudeLauncher().launch(client_config=claude_cfg)
             else:
-                servers = orchestrator.db.get("cloudmesh.ai.server", {})
+                servers = orchestrator.config.get("cloudmesh.ai.server", {})
                 config = servers.get(name, {}) if isinstance(servers, dict) else {}
                 model_name = config.get("model", "Unknown Model")
                 actual_port = port or config.get("remote_port", 8000)
@@ -272,22 +276,22 @@ def stop(identifier, port):
             if identifier.isdigit():
                 if orchestrator.stop_uva(port_pattern=identifier):
                     console.ok(f"Successfully stopped server matching {identifier}.")
-                    from cloudmesh.ai.command.webui_launcher import WebUILauncher
+                    from cloudmesh.ai.vllm.webui_launcher import WebUILauncher
                     WebUILauncher().stop()
                     return
             if orchestrator.stop_uva(server_name=identifier, port_pattern=port):
                 console.ok(f"Successfully stopped server {identifier}.")
-                from cloudmesh.ai.command.webui_launcher import WebUILauncher
+                from cloudmesh.ai.vllm.webui_launcher import WebUILauncher
                 WebUILauncher().stop()
                 return
         elif port:
             if orchestrator.stop_uva(port_pattern=port):
                 console.ok(f"Successfully stopped server matching port {port}.")
-                from cloudmesh.ai.command.webui_launcher import WebUILauncher
+                from cloudmesh.ai.vllm.webui_launcher import WebUILauncher
                 WebUILauncher().stop()
                 return
         else:
-            servers = orchestrator.db.get("cloudmesh.ai.server", {})
+            servers = orchestrator.config.get("cloudmesh.ai.server", {})
             if not servers:
                 console.error("No servers configured. Use 'cmc llm start <name>' first.")
                 return
@@ -299,9 +303,9 @@ def stop(identifier, port):
             if last_server:
                 if orchestrator.stop_uva(server_name=last_server):
                     console.ok(f"Successfully stopped last started server: {last_server}.")
-                    from cloudmesh.ai.command.webui_launcher import WebUILauncher
-                    WebUILauncher().stop()
-                    return
+                from cloudmesh.ai.vllm.webui_launcher import WebUILauncher
+                WebUILauncher().stop()
+                return
             console.error("No active server found in configuration to stop.")
     except Exception as e:
         console.error(f"Error stopping vLLM server: {e}")
@@ -313,7 +317,11 @@ def kill(name, tunnel):
     """Forcefully kill vLLM server."""
     try:
         config_path = os.path.expanduser("~/.config/cloudmesh/llm.yaml")
-        db = YamlDB(filename=config_path)
+        if os.path.exists(config_path):
+            with open(config_path, 'r') as f:
+                db = DotDict(yaml.safe_load(f) or {})
+        else:
+            db = DotDict()
         servers = db.get("cloudmesh.ai.server", {})
         target_host = None
         if isinstance(servers, dict):
@@ -330,8 +338,19 @@ def kill(name, tunnel):
         if tunnel:
             # Use TunnelManager to stop the tunnel
             config_path = os.path.expanduser("~/.config/cloudmesh/llm.yaml")
-            db = YamlDB(filename=config_path)
-            server_config = db.get(f"cloudmesh.ai.server.{name}", {})
+            if os.path.exists(config_path):
+                with open(config_path, 'r') as f:
+                    db = DotDict(yaml.safe_load(f) or {})
+            else:
+                db = DotDict()
+            
+            # Handle dot-notation lookup for the server config
+            server_config = None
+            if "cloudmesh" in db:
+                server_config = db.get("cloudmesh", {}).get("ai", {}).get("server", {}).get(name, {})
+            
+            if not server_config:
+                server_config = {}
             port = server_config.get('port', '8000')
             
             success, result = tunnel_manager.stop_tunnel(target_host, port)
@@ -350,7 +369,11 @@ def status(name):
     """Check vLLM server status."""
     try:
         config_path = os.path.expanduser("~/.config/cloudmesh/llm.yaml")
-        db = YamlDB(filename=config_path)
+        if os.path.exists(config_path):
+            with open(config_path, 'r') as f:
+                db = DotDict(yaml.safe_load(f) or {})
+        else:
+            db = DotDict()
         servers = db.get("cloudmesh.ai.server", {})
         target_host = None
         group = None
@@ -363,7 +386,7 @@ def status(name):
                 raise ValueError(f"Could not resolve host for service '{name}' and no default host configured.")
             group = "uva" if ("uva" in target_host.lower() or "rivanna" in target_host.lower()) else "dgx"
         
-        config = VLLMConfig(db, group, name)
+        config = VLLMConfig()
         client = VLLMClient(config)
         
         status_text = client.get_status()
@@ -388,7 +411,11 @@ def logs(name):
     """Retrieve logs for the vLLM server."""
     try:
         config_path = os.path.expanduser("~/.config/cloudmesh/llm.yaml")
-        db = YamlDB(filename=config_path)
+        if os.path.exists(config_path):
+            with open(config_path, 'r') as f:
+                db = DotDict(yaml.safe_load(f) or {})
+        else:
+            db = DotDict()
         servers = db.get("cloudmesh.ai.server", {})
         target_host = None
         group = None
@@ -401,13 +428,87 @@ def logs(name):
                 raise ValueError(f"Could not resolve host for service '{name}' and no default host configured.")
             group = "uva" if ("uva" in target_host.lower() or "rivanna" in target_host.lower()) else "dgx"
         
-        config = VLLMConfig(db, group, name)
+        config = VLLMConfig()
         client = VLLMClient(config)
         
         log_content = client.get_logs()
         console.print(f"\n[bold blue]Logs for {name} on {target_host}:[/bold blue]\n{log_content}")
     except Exception as e:
         console.error(f"Error retrieving logs: {e}")
+
+@llm_group.command(name="list")
+@click.argument("key", required=False)
+def list_config(key):
+    """List configuration leaf names or display merged config for a specific item.
+    
+    Usage:
+        cmc llm list              # List all leaf names in AI config
+        cmc llm list server       # List all configured servers
+        cmc llm list client       # List all configured clients
+        cmc llm list server.name  # Show merged config for a specific server
+    """
+    try:
+        config_path = os.path.expanduser("~/.config/cloudmesh/llm.yaml")
+        if os.path.exists(config_path):
+            with open(config_path, 'r') as f:
+                db = DotDict(yaml.safe_load(f) or {})
+        else:
+            db = DotDict()
+        
+        def get_leaf_names(data, prefix=""):
+            leaves = []
+            if isinstance(data, dict):
+                for k, v in data.items():
+                    new_prefix = f"{prefix}.{k}" if prefix else k
+                    if isinstance(v, dict) and v:
+                        leaves.extend(get_leaf_names(v, new_prefix))
+                    else:
+                        leaves.append(new_prefix)
+            return leaves
+
+        if not key:
+            ai_config = db.get("cloudmesh.ai", {})
+            if not ai_config:
+                return
+            
+            leaves = sorted(get_leaf_names(ai_config))
+            for leaf in leaves:
+                console.print(leaf)
+            return
+
+        # Resolve the path in the config
+        full_key = f"cloudmesh.ai.{key}"
+        data = db.get(full_key)
+        
+        # Fallback: try looking under 'server' if not found at root
+        if data is None:
+            full_key = f"cloudmesh.ai.server.{key}"
+            data = db.get(full_key)
+        
+        if data is None:
+            return
+
+        if isinstance(data, dict):
+            # If the key is a section (like 'server' or 'client'), list its child names
+            if key in ["server", "client"] or (not "." in key and not any(k in key for k in ["host", "port", "model"])):
+                children = sorted(data.keys())
+                for child in children:
+                    console.print(child)
+            else:
+                # It's a specific item, use VLLMConfig to show merged data
+                item_name = key
+                if key.startswith("server."):
+                    item_name = key[len("server."):]
+                elif key.startswith("client."):
+                    item_name = key[len("client."):]
+                
+                config_obj = VLLMConfig()
+                console.print(config_obj.yaml_data)
+        else:
+            console.print(data)
+
+    except Exception:
+        pass
 
 @llm_group.command(name="info")
 def info_vllm():
@@ -493,8 +594,19 @@ def stop_tunnel(name):
     """Stop the SSH tunnel for a specific server."""
     try:
         config_path = os.path.expanduser("~/.config/cloudmesh/llm.yaml")
-        db = YamlDB(filename=config_path)
-        server_config = db.get(f"cloudmesh.ai.server.{name}", {})
+        if os.path.exists(config_path):
+            with open(config_path, 'r') as f:
+                db = DotDict(yaml.safe_load(f) or {})
+        else:
+            db = DotDict()
+        
+        # Handle dot-notation lookup
+        server_config = None
+        if "cloudmesh" in db:
+            server_config = db.get("cloudmesh", {}).get("ai", {}).get("server", {}).get(name, {})
+        
+        if not server_config:
+            server_config = {}
         if not server_config:
             raise VLLMConfigError(f"Server '{name}' not found in configuration.")
         
@@ -522,8 +634,22 @@ def set_default(type, name):
     """Set the default server or client. Usage: cmc llm default [server|client] [NAME]"""
     try:
         config_path = os.path.expanduser("~/.config/cloudmesh/llm.yaml")
-        db = YamlDB(filename=config_path)
-        db.set(f"cloudmesh.ai.default.{type}", name)
+        if os.path.exists(config_path):
+            with open(config_path, 'r') as f:
+                db = DotDict(yaml.safe_load(f) or {})
+        else:
+            db = DotDict()
+        
+        # Set the value in the nested structure
+        if "cloudmesh" not in db: db["cloudmesh"] = DotDict()
+        if "ai" not in db.cloudmesh: db.cloudmesh["ai"] = DotDict()
+        if "default" not in db.cloudmesh.ai: db.cloudmesh.ai["default"] = DotDict()
+        db.cloudmesh.ai.default[type] = name
+        
+        # Save back to file
+        with open(config_path, 'w') as f:
+            yaml.dump(db.to_dict(), f)
+            
         console.ok(f"Default {type} set to: {name}")
     except Exception as e:
         console.error(f"Error setting default {type}: {e}")
@@ -534,10 +660,16 @@ def configure():
     try:
         # 1. Config file path
         config_path = os.path.expanduser("~/.config/cloudmesh/llm.yaml")
-        db = YamlDB(filename=config_path)
+        if os.path.exists(config_path):
+            with open(config_path, 'r') as f:
+                db = DotDict(yaml.safe_load(f) or {})
+        else:
+            db = DotDict()
         
         # 2. Current state
-        current_server = db.get("cloudmesh.ai.default.server")
+        current_server = None
+        if "cloudmesh" in db:
+            current_server = db.get("cloudmesh", {}).get("ai", {}).get("default", {}).get("server")
         
         console.banner("vLLM Configuration", f"Config File: {config_path}\nCurrent Default Server: [bold]{current_server or 'Not set'}[/bold]")
         
@@ -557,7 +689,14 @@ def configure():
         new_server = input(prompt_text).strip()
         
         if new_server and new_server != current_server:
-            db.set("cloudmesh.ai.default.server", new_server)
+            if "cloudmesh" not in db: db["cloudmesh"] = DotDict()
+            if "ai" not in db.cloudmesh: db.cloudmesh["ai"] = DotDict()
+            if "default" not in db.cloudmesh.ai: db.cloudmesh.ai["default"] = DotDict()
+            db.cloudmesh.ai.default["server"] = new_server
+            
+            with open(config_path, 'w') as f:
+                yaml.dump(db.to_dict(), f)
+                
             console.ok(f"Default server updated to: {new_server}")
         elif not new_server and not current_server:
             console.error("A server must be specified.")
@@ -605,8 +744,8 @@ def launch(client, port):
     if client == "aider":
         try:
             # Path to the config file (relative to this file: src/cloudmesh/ai/command/vllm.py)
-            # Templates are in src/cloudmesh/ai/command/templates/
-            config_path = Path(__file__).parent / "templates" / "aider.yaml"
+            # Templates are in src/cloudmesh/ai/vllm/config/templates/
+            config_path = Path(__file__).parent / ".." / "vllm" / "config" / "templates" / "aider.yaml"
             
             if not config_path.exists():
                 console.error(f"Config file not found at {config_path}")
@@ -649,14 +788,14 @@ def launch(client, port):
     elif client == "openwebui":
         try:
             console.print("[blue]Launching Open WebUI...[/blue]")
-            from cloudmesh.ai.command.orchestrator import get_vllm_api_key
+            from cloudmesh.ai.vllm.orchestrator import get_vllm_api_key
             orchestrator = VLLMOrchestrator()
             
             # Resolve the correct port: use override if provided, otherwise default server or first running server
             local_port = port
             if not local_port:
-                default_server = orchestrator.db.get("cloudmesh.ai.default.server")
-                servers = orchestrator.db.get("cloudmesh.ai.server", {})
+                default_server = orchestrator.config.get("cloudmesh.ai.default.server")
+                servers = orchestrator.config.get("cloudmesh.ai.server", {})
                 local_port = 8000
                 if default_server and isinstance(servers, dict):
                     local_port = servers.get(default_server, {}).get("local_port", 8000)
@@ -667,7 +806,7 @@ def launch(client, port):
                             local_port = s_cfg.get("local_port", 8000)
                             break
             
-            clients = orchestrator.db.get("cloudmesh.ai.client", {})
+            clients = orchestrator.config.get("cloudmesh.ai.client", {})
             webui_cfg = clients.get("openwebui", {}) if isinstance(clients, dict) else {}
             
             # Ensure the API base matches the active server port
@@ -679,12 +818,12 @@ def launch(client, port):
             if raw_key:
                 if raw_key.startswith("{") and raw_key.endswith("}"):
                     lookup_key = raw_key[1:-1]
-                    api_key = get_vllm_api_key(orchestrator.db, lookup_key=lookup_key)
+                    api_key = get_vllm_api_key(orchestrator.config, lookup_key=lookup_key)
                 else:
                     api_key = raw_key
             
             if not api_key:
-                api_key = get_vllm_api_key(orchestrator.db)
+                api_key = get_vllm_api_key(orchestrator.config)
                 
             if api_key:
                 webui_cfg["OPENAI_API_KEY"] = api_key
@@ -695,14 +834,14 @@ def launch(client, port):
     elif client == "claude":
         try:
             console.print("[blue]Launching Claude CLI...[/blue]")
-            from cloudmesh.ai.command.orchestrator import get_vllm_api_key
+            from cloudmesh.ai.vllm.orchestrator import get_vllm_api_key
             orchestrator = VLLMOrchestrator()
             
             # Resolve the correct port: use override if provided, otherwise default server or first running server
             local_port = port
             if not local_port:
-                default_server = orchestrator.db.get("cloudmesh.ai.default.server")
-                servers = orchestrator.db.get("cloudmesh.ai.server", {})
+                default_server = orchestrator.config.get("cloudmesh.ai.default.server")
+                servers = orchestrator.config.get("cloudmesh.ai.server", {})
                 local_port = 8000
                 if default_server and isinstance(servers, dict):
                     local_port = servers.get(default_server, {}).get("local_port", 8000)
@@ -713,7 +852,7 @@ def launch(client, port):
                             local_port = s_cfg.get("local_port", 8000)
                             break
             
-            clients = orchestrator.db.get("cloudmesh.ai.client", {})
+            clients = orchestrator.config.get("cloudmesh.ai.client", {})
             claude_cfg = clients.get("claude", {}) if isinstance(clients, dict) else {}
             
             # Ensure the API base matches the active server port
@@ -725,18 +864,18 @@ def launch(client, port):
             if raw_key:
                 if raw_key.startswith("{") and raw_key.endswith("}"):
                     lookup_key = raw_key[1:-1]
-                    api_key = get_vllm_api_key(orchestrator.db, lookup_key=lookup_key)
+                    api_key = get_vllm_api_key(orchestrator.config, lookup_key=lookup_key)
                 else:
                     api_key = raw_key
             
             if not api_key:
-                api_key = get_vllm_api_key(orchestrator.db)
+                api_key = get_vllm_api_key(orchestrator.config)
                 
             if api_key:
                 claude_cfg["OPENAI_API_KEY"] = api_key
             
-            from cloudmesh.ai.command.launch import ClaudeLauncher
-            ClaudeLauncher().launch(client_config=claude_cfg)
+                from cloudmesh.ai.vllm.claude_launcher import ClaudeLauncher
+                ClaudeLauncher().launch(client_config=claude_cfg)
         except Exception as e:
             console.error(f"Error launching claude: {e}")
     else:

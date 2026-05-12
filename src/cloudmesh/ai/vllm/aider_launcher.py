@@ -1,23 +1,29 @@
 import os
 import subprocess
 import textwrap
-from yamldb import YamlDB
-from cloudmesh.ai.common import banner
+import yaml
+from cloudmesh.ai.common import banner, DotDict
 from cloudmesh.ai.common.io import console
-from cloudmesh.ai.command.docker_manager import DockerManager
+from cloudmesh.ai.vllm.docker_manager import DockerManager
 
 class AiderLauncher:
     """Handles the launch of Aider with vLLM backend."""
 
     def __init__(self):
         self.docker = DockerManager()
-        # Use YamlDB to load the resolved configuration in memory
-        self.db = YamlDB(filename=os.path.expanduser("~/.config/cloudmesh/llm.yaml"), backend=":memory:")
+        config_path = os.path.expanduser("~/.config/cloudmesh/llm.yaml")
+        if os.path.exists(config_path):
+            with open(config_path, 'r') as f:
+                self.db = DotDict(yaml.safe_load(f) or {})
+        else:
+            self.db = DotDict()
 
     def launch(self, client_config=None):
         """Launch the aider CLI with required environment variables."""
-        # Use resolved config from YamlDB - check both client and llm paths for compatibility
+        # Use resolved config from DotDict - check both client and llm paths for compatibility
         aider_config = self.db.get("cloudmesh.ai.client.aider") or self.db.get("cloudmesh.ai.llm.aider", {})
+        if not isinstance(aider_config, dict):
+            aider_config = {}
         
         # Merge with client_config if provided
         config = {**aider_config, **(client_config or {})}
@@ -75,8 +81,10 @@ class AiderLauncher:
 
     def launch_docker(self, client_config=None, force=False):
         """Launch Aider inside a Docker container to avoid Python version issues."""
-        # Use resolved config from YamlDB - check both client and llm paths for compatibility
+        # Use resolved config from DotDict - check both client and llm paths for compatibility
         aider_config = self.db.get("cloudmesh.ai.client.aider") or self.db.get("cloudmesh.ai.llm.aider", {})
+        if not isinstance(aider_config, dict):
+            aider_config = {}
         
         # Merge with client_config if provided
         config = {**aider_config, **(client_config or {})}

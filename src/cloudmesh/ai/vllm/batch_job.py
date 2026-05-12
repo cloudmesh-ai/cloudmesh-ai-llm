@@ -1,3 +1,4 @@
+import textwrap
 from cloudmesh.ai.vllm.config import VLLMConfig
 
 class VLLMBatchJob:
@@ -17,23 +18,25 @@ class VLLMBatchJob:
         partition = self.config.get('partition')
         reservation = self.config.get('reservation')
         
-        content = f"""#!/bin/bash
-#SBATCH --job-name=vllm-{self.name}
-#SBATCH --output={working_dir}/{self.name}_%j.out
-#SBATCH --error={working_dir}/{self.name}_%j.err
-"""
+        content = textwrap.dedent(f"""\
+            #!/bin/bash
+            #SBATCH --job-name=vllm-{self.name}
+            #SBATCH --output={working_dir}/{self.name}_%j.out
+            #SBATCH --error={working_dir}/{self.name}_%j.err
+            """)
         if partition:
             content += f"#SBATCH --partition={partition}\n"
         if reservation:
             content += f"#SBATCH --reservation={reservation}\n"
             
-        content += f"""#SBATCH --gres=gpu:{self.config.get('gres', 'gpu:1')}
-#SBATCH --cpus-per-task={self.config.get('cpus', '1')}
-#SBATCH --mem={self.config.get('mem', '16G')}
-#SBATCH --time={self.config.get('time', '24:00:00')}
+        content += textwrap.dedent(f"""\
+            #SBATCH --gres=gpu:{self.config.get('gres', 'gpu:1')}
+            #SBATCH --cpus-per-task={self.config.get('cpus', '1')}
+            #SBATCH --mem={self.config.get('mem', '16G')}
+            #SBATCH --time={self.config.get('time', '24:00:00')}
 
-{self.script_path}
-"""
+            {self.script_path}
+            """)
         return content
 
     def generate_ijob_command(self) -> str:

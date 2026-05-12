@@ -10,12 +10,12 @@ def test_server_uva_load_examples(tmp_path):
     config_file = tmp_path / "vllm_servers.yaml"
     
     with patch("os.path.expanduser", return_value=str(config_file)):
-        # Initialize ServerUVA. Since config_file doesn't exist, it should load examples.
+        # Initialize ServerUVA.
         server = ServerUVA("test-host")
         
-        # Check if examples were loaded into the DB
-        # Based on vllm_servers_example.yaml, we expect 'gemma-4-31b'
-        config = server.db.get("cloudmesh.ai.uva.gemma-4-31b")
+        # Check if examples are resolvable via VLLMConfig
+        # We use _get_config which uses VLLMConfig to merge examples and user config
+        config = server._get_config("gemma-4-31b")
         assert config is not None
         assert "model" in config
         assert "image" in config
@@ -25,12 +25,11 @@ def test_server_dgx_load_examples(tmp_path):
     config_file = tmp_path / "vllm_servers.yaml"
     
     with patch("os.path.expanduser", return_value=str(config_file)):
-        # Initialize ServerDGX. Since config_file doesn't exist, it should load examples.
+        # Initialize ServerDGX.
         server = ServerDGX("test-host")
         
-        # Check if examples were loaded into the DB
-        # Based on vllm_servers_example.yaml, we expect 'gemma-4-31b'
-        config = server.db.get("cloudmesh.ai.dgx.gemma-4-31b")
+        # Check if examples are resolvable via VLLMConfig
+        config = server._get_config("gemma-4-31b")
         assert config is not None
         assert "model" in config
         assert "image" in config
@@ -43,6 +42,7 @@ def test_no_reload_if_config_exists(tmp_path):
     with patch("os.path.expanduser", return_value=str(config_file)):
         server = ServerUVA("test-host")
         
-        # Should have custom-server, but NOT gemma-4-31b (because examples shouldn't load)
+        # Should have custom-server in the user DB
         assert server.db.get("custom-server") is not None
+        # Examples are still resolvable via VLLMConfig, but not present in the user DB
         assert server.db.get("gemma-4-31b") is None
