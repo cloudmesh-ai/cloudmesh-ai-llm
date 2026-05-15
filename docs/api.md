@@ -4,4 +4,4 @@ This page provides the API reference for the `cloudmesh-ai-llm` library.
 
 ## API Documentation
 
-::: cloudmesh.ai.command.vllm
+::: cloudmesh.ai.vllm
