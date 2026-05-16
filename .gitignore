@@ -1,7 +1,5 @@
-# Local AI/LLM directories
-dgx/
-donttouch/
-start-claude-4.sh
+# MkDocs build output
+site/
 
 # Python
 __pycache__/
@@ -21,34 +19,21 @@ parts/
 sdist/
 var/
 wheels/
-share/python-wheels/
 *.egg-info/
 .installed.cfg
 *.egg
-MANIFEST
 
-# Virtual Environments
-.env
-.venv
-venv/
-ENV/
-env/
+# Testing
+.pytest_cache/
+.coverage
+.report.html
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
 
 # IDEs
 .vscode/
 .idea/
 *.swp
 *.swo
-
-# OS
-.DS_Store
-Thumbs.db
-
-# Logs and Databases
-*.log
-*.sqlite3
-
-# Tool Artifacts
-.aider.chat.history.md
-.aider.input.history
-.aider*
