@@ -22,6 +22,7 @@ dependencies = [
     "rich",
     "cloudmesh-ai-common",
     "cloudmesh-ai-cmc",
+    "cloudmesh-ai-theme",
 ]
 [tool.setuptools.dynamic]
 version = {file = "VERSION"}
