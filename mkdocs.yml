@@ -3,13 +3,14 @@ extra_css:
 - css/custom.css
 nav:
 - Home: index.md
+- Documents:
+  - README: readme.md
+  - uva: uva.md
 - Project:
   - Changelog: CHANGELOG.md
   - GitHub: https://github.com/cloudmesh-ai/cloudmesh-ai-llm
   - Issues: https://github.com/cloudmesh-ai/cloudmesh-ai-llm/issues
 - API Reference: api.md
-- README: README.md
-- uva: uva.md
 plugins:
 - search
 - mkdocstrings:
