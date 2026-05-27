@@ -1,6 +1,7 @@
 # MkDocs build output
 site/
 .DS_Store
+bin/.DS_Store
 # Python
 __pycache__/
 *.py[cod]

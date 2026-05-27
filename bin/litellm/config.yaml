@@ -1,0 +1,90 @@
+model_list:
+  # --- WHITE HOST (18000) ---
+  - model_name: qwen-2.5-14b-white
+    litellm_params:
+      model: openai/Qwen/Qwen2.5-14B-Instruct-AWQ
+      api_base: http://white:18000/v1
+      api_key: sk-dummy
+    model_info:
+      max_tokens: 32768
+  - model_name: llama-3-8b-white
+    litellm_params:
+      model: openai/meta-llama/Meta-Llama-3-8B-Instruct
+      api_base: http://white:18000/v1
+      api_key: sk-dummy
+  - model_name: qwen-2.5-32b-white
+    litellm_params:
+      model: openai/Qwen/Qwen2.5-32B-Instruct-AWQ
+      api_base: http://white:18000/v1
+      api_key: sk-dummy
+  - model_name: qwen-2.5-coder-32b-white
+    litellm_params:
+      model: openai/Qwen/Qwen2.5-Coder-32B-Instruct-AWQ
+      api_base: http://white:18000/v1
+      api_key: sk-dummy
+  - model_name: gemma-2-27b-white
+    litellm_params:
+      model: openai/google/gemma-2-27b-it
+      api_base: http://white:18000/v1
+      api_key: sk-dummy
+  - model_name: gemma-4-it-white
+    litellm_params:
+      model: openai/google/gemma-4-e4b-it
+      api_base: http://white:18000/v1
+      api_key: sk-dummy
+
+  # --- SPARK HOST (18001) ---
+  - model_name: llama-3-70b-fp4-spark
+    litellm_params:
+      model: openai/unsloth/Llama-3-70B-Instruct-quantized-FP4
+      api_base: http://spark:18001/v1
+      api_key: sk-dummy
+  - model_name: llama-3-70b-fp8-spark
+    litellm_params:
+      model: openai/neuralmagic/Meta-Llama-3-70B-FP8
+      api_base: http://spark:18001/v1
+      api_key: sk-dummy
+  - model_name: llama-3-8b-spark
+    litellm_params:
+      model: openai/meta-llama/Meta-Llama-3-8B-Instruct
+      api_base: http://spark:18001/v1
+      api_key: sk-dummy
+  - model_name: deepseek-r1-70b-spark
+    litellm_params:
+      model: openai/casperhansen/deepseek-r1-distill-llama-70b-awq
+      api_base: http://spark:18001/v1
+      api_key: sk-dummy
+  - model_name: gemma-2-27b-spark
+    litellm_params:
+      model: openai/google/gemma-2-27b-it
+      api_base: http://spark:18001/v1
+      api_key: sk-dummy
+  - model_name: qwen-moe-a14b-spark
+    litellm_params:
+      model: openai/Qwen/Qwen2.5-MoE-A14B-Instruct
+      api_base: http://spark:18001/v1
+      api_key: sk-dummy
+  - model_name: qwen-3.6-moe-a3b-instruct-spark
+    litellm_params:
+      model: openai/Qwen/Qwen3.6-35B-A3B-Instruct
+      api_base: http://spark:18001/v1
+      api_key: sk-dummy
+  - model_name: qwen-3.6-moe-a3b-base-spark
+    litellm_params:
+      model: openai/Qwen/Qwen3.6-35B-A3B
+      api_base: http://spark:18001/v1
+      api_key: sk-dummy
+  - model_name: gemma-4-it-spark
+    litellm_params:
+      model: openai/google/gemma-4-it
+      api_base: http://spark:18001/v1
+      api_key: sk-dummy
+  - model_name: qwen3-coder-32b-spark
+    litellm_params:
+      model: openai/Qwen/Qwen3-Coder-32B-Instruct
+      api_base: http://spark:18001/v1
+      api_key: sk-dummy
+
+general_settings:
+  master_key: os.environ/LITELLM_MASTER_KEY
+  store_model_in_db: False

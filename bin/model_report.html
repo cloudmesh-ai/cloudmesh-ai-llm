@@ -1,0 +1,41 @@
+
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>NVIDIA Model Catalog</title>
+        <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/jquery.dataTables.min.css">
+        <script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
+        <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+        <style>
+            body { font-family: sans-serif; padding: 20px; background-color: #f4f7f6; }
+            .container { background-color: white; padding: 25px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+            h2 { color: #76b900; }
+            /* Force pagination elements to be hidden */
+            .dataTables_paginate { display: none !important; }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <h2>NVIDIA Model Catalog (Full List)</h2>
+            <table class="dataframe display">
+  <thead>
+    <tr style="text-align: right;">
+    </tr>
+  </thead>
+  <tbody>
+  </tbody>
+</table>
+        </div>
+        <script>
+            $(document).ready(function() {
+                $('table').DataTable({
+                    "paging": false,
+                    "scrollY": "70vh",
+                    "scrollCollapse": true,
+                    "searching": true
+                });
+            });
+        </script>
+    </body>
+    </html>
+    

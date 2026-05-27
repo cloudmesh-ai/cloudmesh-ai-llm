@@ -1,0 +1,13 @@
+services:
+  litellm:
+    image: ghcr.io/berriai/litellm:main-latest
+    container_name: litellm
+    ports:
+      - "4000:4000"
+    volumes:
+      - ./config.yaml:/app/config.yaml
+    environment:
+      # This reads the local file and assigns it to the container's environment
+      - LITELLM_MASTER_KEY=$(cat ~/gemma/server_master_key.txt)
+    command: ["--config", "/app/config.yaml", "--port", "4000", "--debug"]
+    restart: unless-stopped
