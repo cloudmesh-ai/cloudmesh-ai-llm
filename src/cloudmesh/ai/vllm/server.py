@@ -15,9 +15,10 @@ class Server(ABC):
     Abstract base class for vLLM server implementations.
     """
 
-    def __init__(self, host: str, db=None):
+    def __init__(self, host: str, db=None, launch_mode: str = "remote"):
         self.host = host
         self.logger = logging.getLogger(self.__class__.__name__)
+        self.launch_mode = launch_mode  # "local" or "remote"
         
         if db:
             self.db = db
@@ -67,7 +68,7 @@ class Server(ABC):
             exec_cmd = self._get_direct_exec_cmd(name, script_path)
             mode = "direct/ijob"
         
-        result = self._run_remote(exec_cmd)
+        result = self._execute(exec_cmd)
         if result.returncode == 0:
             self.logger.info(f"Started vLLM server '{name}' on {self.host} using {mode} with script {script_path}")
         else:
@@ -98,7 +99,7 @@ class Server(ABC):
         
         # 2. Check API health via curl
         health_cmd = f"curl -s -o /dev/null -w '%{{http_code}}' http://localhost:{port}/health"
-        health_result = self._run_remote(health_cmd)
+        health_result = self._execute(health_cmd)
         
         if health_result.stdout.strip() == "200":
             return "Running"
@@ -119,7 +120,7 @@ class Server(ABC):
     def get_logs(self, name: str) -> str:
         """Retrieve logs for the vLLM server."""
         cmd = self._get_log_command(name)
-        result = self._run_remote(cmd)
+        result = self._execute(cmd)
         return result.stdout
 
     @abstractmethod
@@ -147,37 +148,147 @@ class Server(ABC):
         """Return the command to retrieve logs."""
         pass
 
-    def _run_remote(self, cmd: str) -> subprocess.CompletedProcess:
+    def _execute(self, cmd: str) -> subprocess.CompletedProcess:
         """
-        Execute a command on the remote host via SSH.
+        Execute command - either locally or via SSH based on launch_mode.
         """
-        ssh_cmd = ["ssh", self.host, cmd]
-        return subprocess.run(ssh_cmd, capture_output=True, text=True)
+        if self.launch_mode == "local":
+            self.logger.debug(f"[LOCAL] {cmd}")
+            return subprocess.run(cmd, shell=True, capture_output=True, text=True)
+        else:
+            self.logger.debug(f"[REMOTE:{self.host}] {cmd}")
+            ssh_cmd = ["ssh", self.host, cmd]
+            return subprocess.run(ssh_cmd, capture_output=True, text=True)
 
-    def _upload_script(self, content: str, remote_path: str):
+    def _upload_script(self, content: str, path: str):
         """
-        Upload a script to the remote host.
+        Upload/write script locally or remotely based on launch_mode.
         """
-        # Create directory if it doesn't exist
-        dir_path = os.path.dirname(remote_path)
-        self._run_remote(f"mkdir -p {dir_path}")
+        if self.launch_mode == "local":
+            # Write file directly to local filesystem
+            dir_path = os.path.dirname(path)
+            os.makedirs(dir_path, exist_ok=True)
+            with open(path, 'w') as f:
+                f.write(content)
+            os.chmod(path, 0o755)
+            self.logger.debug(f"[LOCAL] Script written to {path}")
+        else:
+            # Upload via SSH to remote host
+            dir_path = os.path.dirname(path)
+            self._execute(f"mkdir -p {dir_path}")
+            
+            ssh_cmd = ["ssh", self.host, f"cat << 'EOF' > {path}\n{content}\nEOF"]
+            subprocess.run(ssh_cmd, capture_output=True, text=True, check=True)
+            self._execute(f"chmod +x {path}")
+            self.logger.debug(f"[REMOTE:{self.host}] Script uploaded to {path}")
 
-        # Use ssh to write the file
-        # We use a heredoc to write the content to the remote file
-        # We escape single quotes in the content to avoid breaking the ssh command
-        escaped_content = content.replace("'", "'\\''")
-        upload_cmd = f"cat << 'EOF' > {remote_path}\n{content}\nEOF"
+    def upload_env_file(self, local_env_path: str, remote_env_path: str = None) -> bool:
+        """
+        Upload a local .env file to the remote server.
         
-        # Since the content can be large, we use a different approach for uploading
-        # to avoid shell argument limits. We'll use a temporary file and scp or 
-        # just use ssh with a heredoc if it's reasonably sized.
-        # For vLLM start commands, they are small.
+        Args:
+            local_env_path (str): Path to local .env file
+            remote_env_path (str, optional): Path on remote server. 
+                If None, uses ~/.cloudmesh/.env
         
-        ssh_cmd = ["ssh", self.host, f"cat << 'EOF' > {remote_path}\n{content}\nEOF"]
-        subprocess.run(ssh_cmd, capture_output=True, text=True, check=True)
+        Returns:
+            bool: True if upload successful
+        """
+        if not os.path.exists(local_env_path):
+            self.logger.error(f"Local env file not found: {local_env_path}")
+            return False
         
-        # Make the script executable
-        self._run_remote(f"chmod +x {remote_path}")
+        if remote_env_path is None:
+            remote_env_path = f"~/.cloudmesh/.env"
+        
+        # Ensure remote directory exists
+        remote_dir = os.path.dirname(remote_env_path)
+        self._execute(f"mkdir -p {remote_dir}")
+        
+        if self.launch_mode == "local":
+            # Local copy
+            try:
+                os.makedirs(remote_dir, exist_ok=True)
+                import shutil
+                shutil.copy2(local_env_path, remote_env_path)
+                self.logger.info(f"[LOCAL] Env file copied to {remote_env_path}")
+                return True
+            except Exception as e:
+                self.logger.error(f"Failed to copy env file locally: {e}")
+                return False
+        else:
+            # Remote upload via scp or SSH
+            try:
+                # Method 1: Using scp if available
+                scp_result = subprocess.run(
+                    ["scp", local_env_path, f"{self.host}:{remote_env_path}"],
+                    capture_output=True, text=True
+                )
+                
+                if scp_result.returncode == 0:
+                    self.logger.info(f"[REMOTE:{self.host}] Env file uploaded to {remote_env_path}")
+                    return True
+                else:
+                    # Method 2: Fallback to SSH with cat
+                    with open(local_env_path, 'r') as f:
+                        content = f.read()
+                    
+                    ssh_cmd = ["ssh", self.host, f"cat << 'ENV_EOF' > {remote_env_path}\n{content}\nENV_EOF"]
+                    result = subprocess.run(ssh_cmd, capture_output=True, text=True)
+                    
+                    if result.returncode == 0:
+                        self.logger.info(f"[REMOTE:{self.host}] Env file uploaded to {remote_env_path}")
+                        return True
+                    else:
+                        self.logger.error(f"Failed to upload env file: {result.stderr}")
+                        return False
+                        
+            except Exception as e:
+                self.logger.error(f"Failed to upload env file: {e}")
+                return False
+
+    def run_with_env(self, command: str, env_path: str = None) -> subprocess.CompletedProcess:
+        """
+        Execute a command with environment variables sourced from a file.
+        
+        Args:
+            command (str): The command to execute
+            env_path (str, optional): Path to env file. If None, uses ~/.cloudmesh/.env
+        
+        Returns:
+            subprocess.CompletedProcess: The result of the command execution
+        """
+        if env_path is None:
+            env_path = "~/.cloudmesh/.env"
+        
+        # Source the env file and run the command
+        # Using bash -c to ensure the env vars are available in the subprocess
+        full_command = f"bash -c 'source {env_path} && {command}'"
+        
+        return self._execute(full_command)
+
+    def deploy_with_env(self, name: str, local_env_path: str = None, sbatch: bool = False) -> None:
+        """
+        Deploy server with environment variables from a .env file.
+        
+        This combines upload_env_file with the normal start() process.
+        
+        Args:
+            name (str): Server configuration name
+            local_env_path (str, optional): Path to local .env file
+            sbatch (bool): Whether to use sbatch
+        """
+        # Upload env file if provided
+        if local_env_path and os.path.exists(local_env_path):
+            remote_env_path = f"~/.cloudmesh/.env_{name}"
+            self.upload_env_file(local_env_path, remote_env_path)
+            
+            # Merge env vars into config before starting
+            config = self._get_config(name)
+            config.merge_env_vars(env_file=local_env_path)
+        
+        # Start the server with the updated config
+        self.start(name, sbatch=sbatch)
 
     def _validate_config(self, config: dict, required_fields: list):
         """

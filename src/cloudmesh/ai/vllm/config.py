@@ -5,6 +5,13 @@ import re
 from cloudmesh.ai.common import DotDict
 from cloudmesh.ai.common.ssh.ssh_config import SSHConfig
 
+# Optional import for python-dotenv
+try:
+    from dotenv import load_dotenv
+    DOTENV_AVAILABLE = True
+except ImportError:
+    DOTENV_AVAILABLE = False
+
 """VLLMConfig provides a centralized way to manage vLLM configurations.
 
 It loads configurations from internal and user-defined YAML files, merges them,
@@ -384,3 +391,281 @@ class VLLMConfig(DotDict):
             yaml.dump(self.properties, f, default_flow_style=False)
         
         return True
+
+    @classmethod
+    def load_env_file(cls, env_file: str = None, override: bool = True) -> dict:
+        """Load environment variables from a .env file.
+        
+        Searches multiple locations in order:
+        1. The specified env_file path (if provided)
+        2. .env in the current directory
+        3. ~/.config/cloudmesh/.env
+        
+        Args:
+            env_file (str, optional): Path to the .env file. If None, searches default locations.
+            override (bool): Whether to override existing environment variables. Defaults to True.
+        
+        Returns:
+            dict: Dictionary of loaded environment variables.
+        
+        Example:
+            >>> # Load from default .env file
+            >>> env_vars = VLLMConfig.load_env_file()
+            >>> # Load from specific file
+            >>> env_vars = VLLMConfig.load_env_file("/path/to/.env.production")
+        """
+        if not DOTENV_AVAILABLE:
+            raise ImportError(
+                "python-dotenv is required for .env file support. "
+                "Install it with: pip install python-dotenv"
+            )
+        
+        # Determine which file to load
+        if env_file:
+            # Explicit path provided - use it or fail
+            env_path = env_file
+            if not os.path.exists(env_path):
+                raise FileNotFoundError(
+                    f"Specified env file not found: {env_path}"
+                )
+        else:
+            # Search default locations in order of priority
+            search_paths = [
+                ".env",  # Current directory
+                os.path.expanduser("~/.config/cloudmesh/.env"),  # User config directory
+            ]
+            
+            env_path = None
+            for path in search_paths:
+                if os.path.exists(path):
+                    env_path = path
+                    break
+            
+            if env_path is None:
+                searched = ", ".join([f"'{p}'" for p in search_paths])
+                raise FileNotFoundError(
+                    f"No env file found. Searched: {searched}"
+                )
+        
+        # Load into a temporary dict to not pollute os.environ if not desired
+        loaded = load_dotenv(env_path, override=override)
+        
+        # Return all env vars that were in the file
+        with open(env_path, 'r') as f:
+            env_vars = {}
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith('#') and '=' in line:
+                    key, value = line.split('=', 1)
+                    key = key.strip()
+                    # Remove quotes if present
+                    value = value.strip()
+                    if (value.startswith('"') and value.endswith('"')) or \
+                       (value.startswith("'") and value.endswith("'")):
+                        value = value[1:-1]
+                    env_vars[key] = value
+            return env_vars
+
+    def merge_env_vars(self, env_vars: dict = None, env_file: str = None):
+        """Merge environment variables into the configuration.
+        
+        This allows environment variables to override or extend the YAML configuration.
+        
+        Args:
+            env_vars (dict, optional): Dictionary of environment variables to merge.
+            env_file (str, optional): Path to .env file to load and merge.
+        
+        Example:
+            >>> config = VLLMConfig()
+            >>> config.merge_env_vars()  # Loads from default .env
+            >>> config.merge_env_vars(env_file=".env.local")
+        """
+        if env_file:
+            try:
+                env_vars = self.load_env_file(env_file)
+            except FileNotFoundError:
+                # Specified file not found - propagate error
+                raise
+        elif env_vars is None:
+            try:
+                env_vars = self.load_env_file()
+            except FileNotFoundError:
+                # No env file found in any default location - that's ok, just return
+                return
+        
+        if not env_vars:
+            return
+        
+        # Define mapping of env var names to config paths
+        env_to_config = {
+            'CLOUDMESH_AI_API_KEY': 'cloudmesh.ai.api_key',
+            'CLOUDMESH_AI_HOST': 'cloudmesh.ai.host',
+            'CLOUDMESH_AI_PORT': 'cloudmesh.ai.port',
+            'CLOUDMESH_AI_USER': 'cloudmesh.ai.user',
+            'VLLM_MODEL': 'cloudmesh.ai.model',
+            'VLLM_GPU_MEMORY_UTILIZATION': 'cloudmesh.ai.gpu_memory_utilization',
+            'VLLM_MAX_MODEL_LEN': 'cloudmesh.ai.max_model_len',
+            'VLLM_TENSOR_PARALLEL_SIZE': 'cloudmesh.ai.tensor_parallel_size',
+            'VLLM_DTYPE': 'cloudmesh.ai.dtype',
+            'VLLM_API_KEY': 'cloudmesh.ai.api_key',
+        }
+        
+        # Auto-detect env vars starting with CLOUDMESH_ or VLLM_
+        for key, value in env_vars.items():
+            # Check predefined mappings
+            if key in env_to_config:
+                self._set_nested_path(env_to_config[key], value)
+            # Auto-convert CLOUDMESH_AI_SERVER__UVA__GEMMA__PORT to cloudmesh.ai.server.uva.gemma.port
+            elif key.startswith(('CLOUDMESH_', 'VLLM_')):
+                config_path = self._env_var_to_config_path(key)
+                self._set_nested_path(config_path, value)
+
+    def _env_var_to_config_path(self, env_var: str) -> str:
+        """Convert an environment variable name to a config path.
+        
+        Args:
+            env_var (str): Environment variable name (e.g., 'CLOUDMESH_AI_SERVER__UVA__GEMMA__PORT')
+        
+        Returns:
+            str: Config path (e.g., 'cloudmesh.ai.server.uva.gemma.port')
+        """
+        # Remove prefix
+        if env_var.startswith('CLOUDMESH_'):
+            base = env_var[len('CLOUDMESH_'):]
+        elif env_var.startswith('VLLM_'):
+            base = env_var[len('VLLM_'):]
+            base = f'AI_{base}'  # Add AI prefix for VLLM vars
+        else:
+            base = env_var
+        
+        # Replace double underscores with dots (for nesting)
+        # Replace single underscores with dots
+        path = base.lower().replace('__', '.').replace('_', '.')
+        
+        # Ensure it starts with cloudmesh
+        if not path.startswith('cloudmesh'):
+            path = 'cloudmesh.' + path
+        
+        return path
+
+    def _set_nested_path(self, path: str, value: any):
+        """Set a value at a nested path in the configuration.
+        
+        Args:
+            path (str): Dot-separated path (e.g., 'cloudmesh.ai.server.port')
+            value: The value to set
+        """
+        keys = path.split('.')
+        current = self._config
+        
+        for key in keys[:-1]:
+            if key not in current:
+                current[key] = {}
+            current = current[key]
+        
+        # Try to convert value to appropriate type
+        current[keys[-1]] = self._convert_env_value(value)
+
+    def _convert_env_value(self, value: str):
+        """Convert an environment variable string to the appropriate Python type.
+        
+        Args:
+            value (str): The string value from environment variable.
+        
+        Returns:
+            The converted value (int, float, bool, or string).
+        """
+        # Try integer
+        try:
+            return int(value)
+        except ValueError:
+            pass
+        
+        # Try float
+        try:
+            return float(value)
+        except ValueError:
+            pass
+        
+        # Try boolean
+        if value.lower() in ('true', 'yes', '1', 'on'):
+            return True
+        if value.lower() in ('false', 'no', '0', 'off'):
+            return False
+        
+        # Return as string
+        return value
+
+    def generate_env_file(self, server_name: str = None) -> str:
+        """Generate .env file content from the current configuration.
+        
+        Args:
+            server_name (str, optional): Server name to include in the generated file (e.g., 'uva.gemma')
+        
+        Returns:
+            str: The generated .env file content.
+        
+        Example:
+            >>> config = VLLMConfig()
+            >>> env_content = config.generate_env_file('uva.gemma')
+            >>> with open('.env', 'w') as f:
+            ...     f.write(env_content)
+        """
+        lines = ["# cloudmesh-ai-llm Environment Configuration", "# Auto-generated from YAML config", ""]
+        
+        # Core settings
+        if server_name:
+            server_config = self.get_server(server_name)
+            if server_config:
+                lines.append(f"# Server: {server_name}")
+                lines.extend(self._dict_to_env_vars(server_config, prefix=''))
+                lines.append("")
+        
+        # User-specific paths
+        lines.append("# User Configuration")
+        lines.append(f"CLOUDMESH_USER_CONFIG_PATH={self.user_config_path}")
+        lines.append("")
+        
+        # SSH settings if available
+        ssh_config = self.get('ssh')
+        if ssh_config:
+            lines.append("# SSH Configuration")
+            lines.append(f"SSH_HOST={ssh_config.get('host', '')}")
+            lines.append(f"SSH_USER={ssh_config.get('user', '')}")
+            lines.append(f"SSH_KEY_PATH={ssh_config.get('key_path', '')}")
+            lines.append("")
+        
+        # Docker settings
+        docker_config = self.get('docker')
+        if docker_config:
+            lines.append("# Docker Configuration")
+            if isinstance(docker_config, dict):
+                lines.extend(self._dict_to_env_vars(docker_config, prefix='DOCKER'))
+            lines.append("")
+        
+        return '\n'.join(lines)
+
+    def _dict_to_env_vars(self, config: dict, prefix: str = '') -> list:
+        """Convert a configuration dictionary to env var lines.
+        
+        Args:
+            config (dict): Configuration dictionary
+            prefix (str): Prefix for the env var names
+        
+        Returns:
+            list: List of environment variable assignment strings
+        """
+        lines = []
+        
+        for key, value in config.items():
+            env_key = f"{prefix}{prefix and '_' or ''}{key.upper()}" if prefix else key.upper()
+            
+            if isinstance(value, dict):
+                lines.extend(self._dict_to_env_vars(value, env_key))
+            elif isinstance(value, (list, tuple)):
+                # Join lists with commas
+                lines.append(f"{env_key}={','.join(str(v) for v in value)}")
+            else:
+                lines.append(f"{env_key}={value}")
+        
+        return lines

@@ -10,8 +10,8 @@ class ServerDGX(Server):
     vLLM server implementation for DGX.
     """
 
-    def __init__(self, host: str, db=None):
-        super().__init__(host, db)
+    def __init__(self, host: str, db=None, launch_mode: str = "remote"):
+        super().__init__(host, db, launch_mode=launch_mode)
 
     def get_start_command(self, name: str) -> str:
         """Return the command used to start the vLLM server on DGX."""
@@ -27,16 +27,16 @@ class ServerDGX(Server):
 
     def _send_stop_signal(self, name: str) -> None:
         container_name = self._get_container_name(name)
-        self._run_remote(f"docker stop {container_name}")
+        self._execute(f"docker stop {container_name}")
 
     def _send_kill_signal(self, name: str) -> None:
         container_name = self._get_container_name(name)
-        self._run_remote(f"docker rm -f {container_name}")
+        self._execute(f"docker rm -f {container_name}")
 
     def _check_process_running(self, name: str) -> bool:
         container_name = self._get_container_name(name)
         proc_cmd = f"docker ps -f name={container_name} --format '{{{{.Status}}}}'"
-        proc_result = self._run_remote(proc_cmd)
+        proc_result = self._execute(proc_cmd)
         return bool(proc_result.stdout.strip())
 
 

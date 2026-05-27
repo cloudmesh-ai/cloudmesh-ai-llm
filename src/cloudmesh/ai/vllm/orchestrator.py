@@ -106,12 +106,33 @@ def get_default_host(db=None):
         return None
 
 
-def get_server(host, db=None):
-    """Helper to instantiate the correct server class based on host."""
+def get_server(host, db=None, server_name=None, launch_mode=None):
+    """
+    Helper to instantiate the correct server class based on host.
+
+    Args:
+        host: The hostname (e.g., 'dgx', 'uva')
+        db: Optional pre-loaded config database
+        server_name: Optional server name to look up launch_mode from config
+        launch_mode: Optional explicit launch_mode ('local' or 'remote').
+                     If not provided, will be auto-detected from config if server_name is given.
+    """
     host_str = str(host)
+
+    # Auto-detect launch_mode from config if server_name provided and launch_mode not explicitly set
+    if launch_mode is None and server_name is not None:
+        config = VLLMConfig(db=db)
+        server_config = config.get_server(f"{host_str}.{server_name}")
+        if server_config:
+            launch_mode = server_config.get("launch_mode", "remote")
+
+    # Default to remote if still not determined
+    if launch_mode is None:
+        launch_mode = "remote"
+
     if "uva" in host_str.lower() or "rivanna" in host_str.lower():
-        return ServerUVA(host_str, db=db)
-    return ServerDGX(host_str, db=db)
+        return ServerUVA(host_str, db=db, launch_mode=launch_mode)
+    return ServerDGX(host_str, db=db, launch_mode=launch_mode)
 
 
 class VLLMOrchestrator:
@@ -871,7 +892,7 @@ class VLLMOrchestrator:
                 f"Host not specified for service '{name}' in configuration."
             )
 
-        server = get_server(target_host)
+        server = get_server(target_host, server_name=name)
         client = VLLMClient(self.config)
 
         console.print(

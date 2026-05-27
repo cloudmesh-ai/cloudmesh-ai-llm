@@ -76,14 +76,14 @@ class TestServerLogic(unittest.TestCase):
 
         server = ServerDGX("dgx-host", db=None)
         server._get_config = MagicMock(return_value=config)
-        server._run_remote = MagicMock()
-        server._run_remote.return_value = MagicMock(returncode=0, stdout="Success", stderr="")
+        server._execute = MagicMock()
+        server._execute.return_value = MagicMock(returncode=0, stdout="Success", stderr="")
         
         server.start(config.name)
         
-        # Verify that the start command was executed via _run_remote
-        # The last call to _run_remote should be the execution of the script
-        last_call_args = server._run_remote.call_args[0][0]
+        # Verify that the start command was executed via _execute
+        # The last call to _execute should be the execution of the script
+        last_call_args = server._execute.call_args[0][0]
         self.assertIn("start_test-dgx.sh", last_call_args)
 
         # The docker run command is uploaded via subprocess.run in _upload_script
@@ -115,14 +115,14 @@ class TestServerLogic(unittest.TestCase):
 
         server = ServerUVA("uva", db=None)
         server._get_config = MagicMock(return_value=config)
-        server._run_remote = MagicMock()
-        server._run_remote.return_value = MagicMock(returncode=0, stdout="Success", stderr="")
+        server._execute = MagicMock()
+        server._execute.return_value = MagicMock(returncode=0, stdout="Success", stderr="")
         
         server.start(config.name, sbatch=True)
         
-        # Verify sbatch submission via _run_remote
-        server._run_remote.assert_called()
-        calls = [call[0][0] for call in server._run_remote.call_args_list]
+        # Verify sbatch submission via _execute
+        server._execute.assert_called()
+        calls = [call[0][0] for call in server._execute.call_args_list]
         self.assertTrue(any("sbatch" in call for call in calls))
 
 class TestVLLMOrchestrator(unittest.TestCase):

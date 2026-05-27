@@ -72,6 +72,7 @@ from cloudmesh.ai.vllm.config import VLLMConfig
 from cloudmesh.ai.vllm.client import VLLMClient
 from cloudmesh.ai.vllm.ijob import IJob
 from cloudmesh.ai.vllm.orchestrator import VLLMOrchestrator, get_default_host, get_server, get_vllm_api_key
+from cloudmesh.ai.command.env import env_group
 
 class RenderVLLMTable:
     """Helper class to render vLLM configurations into a Textual DataTable."""

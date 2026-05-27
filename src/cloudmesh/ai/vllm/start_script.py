@@ -1,22 +1,110 @@
 from cloudmesh.ai.vllm.config import VLLMConfig
 import textwrap
+import os
+from dotenv import load_dotenv
 
 class VLLMStartScript:
     """
     Manages the creation of the shell script used to start a vLLM server.
+    
+    Loads environment variables from ~/.config/cloudmesh/.env for template substitution.
+    Variables like {HF_TOKEN} and {VLLM_API_KEY} are automatically replaced.
     """
+
+    # Default paths for env file lookups
+    DEFAULT_ENV_PATHS = [
+        os.path.expanduser("~/.config/cloudmesh/.env"),
+        os.path.expanduser("~/.config/cloudmesh/llm/.env"),
+    ]
 
     def __init__(self, config: VLLMConfig):
         self.config = config
         self.name = config.name
+        self._env_vars = self._load_env_vars()
+    
+    def _load_env_vars(self) -> dict:
+        """
+        Load environment variables from .env file(s).
+        
+        Searches for .env files in common locations and loads the first one found.
+        Returns a dictionary of loaded variables.
+        
+        Returns:
+            dict: Dictionary of environment variables loaded from .env files
+        """
+        env_vars = {}
+        
+        # Load from default paths if they exist
+        for env_path in self.DEFAULT_ENV_PATHS:
+            if os.path.exists(env_path):
+                # Load into a temporary dict to avoid polluting os.environ
+                loaded = load_dotenv(env_path, override=False)
+                if loaded:
+                    break  # Stop at first successful load
+        
+        # Capture relevant variables for vLLM
+        relevant_vars = [
+            'HF_TOKEN', 'VLLM_API_KEY', 'HUGGING_FACE_HUB_TOKEN',
+            'OPENAI_API_KEY', 'MODEL', 'IMAGE', 'PORT',
+            'TENSOR_PARALLEL_SIZE', 'GPU_MEMORY_UTILIZATION'
+        ]
+        
+        for var in relevant_vars:
+            value = os.environ.get(var)
+            if value:
+                env_vars[var] = value
+        
+        return env_vars
+    
+    def substitute_placeholders(self, text: str) -> str:
+        """
+        Replace placeholders in text with values from config and .env.
+        
+        Supports placeholders like:
+        - {HF_TOKEN}, {VLLM_API_KEY} - loaded from ~/.config/cloudmesh/.env
+        - Standard config placeholders handled by DotDict
+        
+        Args:
+            text (str): The text containing placeholders
+            
+        Returns:
+            str: Text with placeholders substituted
+        """
+        if not text or not isinstance(text, str):
+            return text
+        
+        # First, substitute env vars
+        for var, value in self._env_vars.items():
+            placeholder = f"{{{var}}}"
+            if placeholder in text:
+                text = text.replace(placeholder, value)
+        
+        return text
 
     def generate(self, use_nohup: bool = False) -> str:
         """
         Generate the content of the start script.
+        
+        For local launch mode, supports custom script templates with placeholder substitution
+        from ~/.config/cloudmesh/.env (e.g., {HF_TOKEN}, {VLLM_API_KEY}).
         """
         port = self.config.get('port', '8000')
         log_dir = "~/vllm_logs"
         log_file = f"{log_dir}/{self.name}.log"
+
+        # Check for local launch mode with custom script template
+        if self.config.get('launch_mode') == 'local' and self.config.get('script'):
+            # Use custom script template with env substitution
+            script_template = self.config.get('script')
+            script_template = self.substitute_placeholders(script_template)
+            # Also substitute config placeholders
+            config_dict = self.config.to_dict() if hasattr(self.config, 'to_dict') else dict(self.config)
+            for key, value in config_dict.items():
+                if isinstance(value, (str, int, float)):
+                    placeholder = f"{{{key}}}"
+                    if placeholder in script_template:
+                        script_template = script_template.replace(placeholder, str(value))
+            return script_template.strip()
 
         if self.config.group == "uva":
             # Build arguments list for UVA
