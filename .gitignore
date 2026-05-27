@@ -35,5 +35,6 @@ coverage.xml
 # IDEs
 .vscode/
 .idea/
+.clinedoc
 *.swp
 *.swo

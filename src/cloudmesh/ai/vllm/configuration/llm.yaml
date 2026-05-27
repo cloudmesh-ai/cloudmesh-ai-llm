@@ -96,6 +96,50 @@ cloudmesh:
           host: "uva"
           user: '{~/.ssh/config:uva.user}'
 
+        gemma2:
+          name: "vllm_gemma_{remote_port}"
+          launch_mode: sbatch
+          account: "bii_dsc_community"
+          partition: "bii-gpu"
+          reservation: "bi_fox_dgx"
+          gres: "gpu:a100:2"
+          cpus: 2
+          gpus: 2
+          mem: "96G"
+          image: "/scratch/thf2bn/vllm_gemma4.sif"
+          model: "google/gemma-4-31B-it"
+          cache_dir: "/scratch/{user}/hf_cache"
+          key_dir: "$HOME/gemma"
+          host: "uva"
+          local_port: 18123
+          remote_port: 18123
+          user: '{~/.ssh/config:uva.user}'
+          shell: /bin/bash
+          script: |
+            export HF_TOKEN=$(cat $HOME/.config/cloudmesh/llm/HF_token.txt)
+            export VLLM_API_KEY=$(cat $HOME/.config/cloudmesh/llm/server_master_key.txt)
+            cd /scratch/{user}
+            module load apptainer
+            apptainer run --nv \
+              -B {cache_dir}:/root/.cache/huggingface \
+              --env HF_TOKEN="${HF_TOKEN}" \
+              --env VLLM_API_KEY="${VLLM_API_KEY}" \
+              {image} \
+              --model {model} \
+              --tensor-parallel-size {gpus} \
+              --gpu-memory-utilization 0.95 \
+              --max-model-len 131072 \
+              --quantization fp8 \
+              --kv-cache-dtype fp8 \
+              --enable-prefix-caching \
+              --enable-chunked-prefill \
+              --load-format safetensors \
+              --enable-auto-tool-choice \
+              --tool-call-parser gemma4 \
+              --reasoning-parser gemma4 \
+              --host 0.0.0.0 \
+              --port {remote_port}
+
         gemma:
           name: "vllm_gemma_{remote_port}"
           launch_mode: sbatch

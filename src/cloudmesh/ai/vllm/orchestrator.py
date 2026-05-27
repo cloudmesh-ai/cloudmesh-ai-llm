@@ -5,6 +5,7 @@ import textwrap
 import subprocess
 import time
 import yaml
+import json
 import importlib.resources
 from pathlib import Path
 from cloudmesh.ai.common import DotDict
@@ -16,7 +17,8 @@ from cloudmesh.ai.vllm.client import VLLMClient
 from cloudmesh.ai.vllm.server_uva import ServerUVA
 from cloudmesh.ai.vllm.server_dgx import ServerDGX
 from cloudmesh.ai.vllm.squeue import SQueue
-from cloudmesh.ai.vpn.vpn import Vpn
+
+# from cloudmesh.ai.vpn.vpn import Vpn
 
 
 def get_vllm_api_key(config, keys_path_override=None, lookup_key=None):
@@ -117,8 +119,79 @@ class VLLMOrchestrator:
 
     def __init__(self):
         self.config = VLLMConfig()
+        self.state_path = os.path.expanduser("~/.config/cloudmesh/llm_state.json")
         self.template_dir = Path(__file__).parent / "configuration" / "templates"
         self.server_config = {}
+
+    def _load_state(self) -> dict:
+        """Load runtime state from JSON file."""
+        if os.path.exists(self.state_path):
+            try:
+                with open(self.state_path, "r") as f:
+                    return json.load(f)
+            except Exception as e:
+                console.warning(f"Could not load state file: {e}")
+        return {}
+
+    def _save_state(self, state: dict):
+        """Save runtime state to JSON file."""
+        try:
+            os.makedirs(os.path.dirname(self.state_path), exist_ok=True)
+            with open(self.state_path, "w") as f:
+                json.dump(state, f, indent=2)
+        except Exception as e:
+            console.error(f"Could not save state file: {e}")
+
+    def _resolve_vllm_image(self, config):
+        """Resolve the vLLM image path from configuration."""
+        remote_user = config.get("user")
+        vllm_image = config.get("image")
+        if not vllm_image:
+            return f"/scratch/{remote_user}/vllm_gemma4.sif"
+        if not vllm_image.startswith("/") and not vllm_image.startswith("docker://"):
+            if ":" in vllm_image:
+                return f"docker://{vllm_image}"
+            return f"/scratch/{remote_user}/{vllm_image}"
+        return vllm_image
+
+    def _generate_sbatch_script(self, config, server_name, vllm_image=None):
+        """Generate the sbatch submit script based on configuration."""
+        remote_port = config.get("remote_port", 8000)
+        job_name = config.get("name")
+        remote_dir = config.get("dir")
+        email = config.get("email", "laszewski@gmail.com")
+        gpus = config.get("gpus", "4")
+        mem = config.get("mem", "96gb")
+        image = vllm_image or "{VLLM_IMAGE}"
+
+        return textwrap.dedent(f"""\
+            #!/bin/bash
+            #SBATCH --job-name={job_name}
+            #SBATCH --mail-user={email}
+            #SBATCH --mail-type=BEGIN
+            #SBATCH --partition=bii-gpu
+            #SBATCH --reservation=bi_fox_dgx
+            #SBATCH --account=bi_dsc_community
+            #SBATCH --gpus=a100:{gpus}
+            #SBATCH --cpus-per-task=32
+            #SBATCH --mem={mem}
+            #SBATCH --time=03:00:00
+            #SBATCH --output={remote_dir}/{job_name}.out
+            #SBATCH --error={remote_dir}/{job_name}.err
+
+            cd {remote_dir}
+            PORT={remote_port} VLLM_IMAGE="{image}" bash start_uva.sh
+            """)
+
+    def get_job_name(self, config, port):
+        """Resolve the Slurm job name based on config and port."""
+        name = config.get("name", "vllm_server")
+        # If the name has a port placeholder or we want to ensure the port is appended
+        if "{port}" in name:
+            return name.replace("{port}", str(port))
+        if not name.endswith(f"_{port}"):
+            return f"{name}_{port}"
+        return name
 
     def _kill_port_process(self, port: int):
         """Kill any process currently binding to the specified local port."""
@@ -179,7 +252,15 @@ class VLLMOrchestrator:
         config = self.server_config
         script_content = config.get("script")
 
+        if script_content:
+            console.print(
+                f"[dim]Using script from configuration for {script_name}[/dim]"
+            )
+
         if not script_content:
+            console.print(
+                f"[yellow]No script found in config, falling back to template: {script_name}[/yellow]"
+            )
             # Fallback to template
             script_path = self.template_dir / script_name
             if script_path.exists():
@@ -282,13 +363,28 @@ class VLLMOrchestrator:
                 f"[blue]Searching for vLLM jobs matching port pattern '{port_pattern}'...[/blue]"
             )
         elif server_name:
-            persisted_job = self.config.get("job_id")
+            state = self._load_state()
+            persisted_job = state.get(server_name, {}).get("job_id")
             if persisted_job:
                 console.print(
                     f"[blue]Stopping persisted job {persisted_job} for {server_name}...[/blue]"
                 )
                 if sq.cancel(persisted_job):
-                    console.ok(f"Successfully cancelled job {persisted_job}.")
+                    # Verify the job is gone before removing from state
+                    time.sleep(2)
+                    jobs = sq.get_jobs()
+                    if not any(j.get("job_id") == persisted_job for j in jobs):
+                        state[server_name] = state.get(server_name, {}).copy()
+                        state[server_name].pop("job_id", None)
+                        state[server_name].pop("node_name", None)
+                        self._save_state(state)
+                        console.ok(
+                            f"Successfully cancelled and cleared state for job {persisted_job}."
+                        )
+                    else:
+                        console.warning(
+                            f"Job {persisted_job} cancelled but still appearing in squeue."
+                        )
                     return True
                 else:
                     console.error(f"Failed to cancel persisted job {persisted_job}.")
@@ -395,8 +491,9 @@ class VLLMOrchestrator:
                         resolved_job_name = self.get_job_name(
                             server_cfg or self.config, remote_port
                         )
+                        state = self._load_state()
                         if (
-                            server_cfg and server_cfg.get("job_id") == job_id
+                            state.get(name, {}).get("job_id") == job_id
                         ) or resolved_job_name == job_name:
                             server_name = name
                             port = remote_port
@@ -453,9 +550,9 @@ class VLLMOrchestrator:
         console.print(f"  Job Name: [green]{job_name}[/green]")
         console.print(f"  Remote Dir: [green]{remote_dir}[/green]")
 
-        if not console.ynchoice("Proceed with these settings?"):
-            console.print("Launch aborted by user.")
-            return False
+        # if not console.ynchoice("Proceed with these settings?"):
+        #    console.print("Launch aborted by user.")
+        #    return False
 
         try:
             # 1. Deployment (MUST happen before ijob)
@@ -504,42 +601,13 @@ class VLLMOrchestrator:
             console.banner("Allocation")
             console.print("[blue]Requesting GPU allocation via sbatch...[/blue]")
 
-            # Resolve image path: from config or default to /scratch/{user}/vllm_gemma4.sif
-            remote_user = config.get("user")
-            vllm_image = config.get("image")
-            if not vllm_image:
-                vllm_image = f"/scratch/{remote_user}/vllm_gemma4.sif"
-            elif not vllm_image.startswith("/") and not vllm_image.startswith(
-                "docker://"
-            ):
-                # If it contains a colon, it's likely a Docker image name (e.g., vllm/vllm-openai:latest)
-                if ":" in vllm_image:
-                    vllm_image = f"docker://{vllm_image}"
-                else:
-                    # Otherwise, assume it's a local file in the user's scratch directory
-                    vllm_image = f"/scratch/{remote_user}/{vllm_image}"
+            # Resolve image path
+            vllm_image = self._resolve_vllm_image(config)
 
-            # Get email from config or use default
-            email = config.get("email", "laszewski@gmail.com")
-
-            sbatch_script = textwrap.dedent(f"""\
-                #!/bin/bash
-                #SBATCH --job-name={job_name}
-                #SBATCH --mail-user={email}
-                #SBATCH --mail-type=BEGIN
-                #SBATCH --partition=bii-gpu
-                #SBATCH --reservation=bi_fox_dgx
-                #SBATCH --account=bi_dsc_community
-                #SBATCH --gpus=a100:4
-                #SBATCH --cpus-per-task=32
-                #SBATCH --mem=96gb
-                #SBATCH --time=03:00:00
-                #SBATCH --output={remote_dir}/{job_name}.out
-                #SBATCH --error={remote_dir}/{job_name}.err
-
-                cd {remote_dir}
-                PORT={remote_port} VLLM_IMAGE="{vllm_image}" bash {script_name}
-                """)
+            # Generate the sbatch script using the helper method
+            sbatch_script = self._generate_sbatch_script(
+                config, server_name, vllm_image=vllm_image
+            )
             sbatch_file = f"{remote_dir}/submit.sh"
             subprocess.run(
                 f"ssh uva 'echo \"{sbatch_script}\" > {sbatch_file}'",
@@ -595,10 +663,13 @@ class VLLMOrchestrator:
 
             console.ok(f"Allocated node: {node_name}")
 
-            # Persist job and node info to config
-            self.config["job_id"] = job_id
-            self.config["node_name"] = node_name
-            self.config.save()
+            # Persist job and node info to runtime state (avoid modifying llm.yaml)
+            state = self._load_state()
+            state[server_name] = {
+                "job_id": job_id,
+                "node_name": node_name,
+            }
+            self._save_state(state)
 
             console.banner("Execution")
             # The server is already started by the 'ijob' command we injected.
@@ -663,7 +734,9 @@ class VLLMOrchestrator:
         # If port_override is provided, it overrides both local and remote ports
         if port_override:
             if not (0 <= port_override <= 65535):
-                raise ValueError(f"Port {port_override} is out of range. Must be between 0 and 65535.")
+                raise ValueError(
+                    f"Port {port_override} is out of range. Must be between 0 and 65535."
+                )
             self.server_config["remote_port"] = port_override
             self.server_config["local_port"] = port_override
 
@@ -704,7 +777,7 @@ class VLLMOrchestrator:
         # We loop until convergence to handle nested placeholders.
 
         config_data = self.server_config.to_dict()
-        
+
         # Final expansion pass: Replace all {key} placeholders in string fields.
         # We use a manual loop instead of DotDict.expand to avoid replacing shell variables like ${VAR}.
         while True:
@@ -715,20 +788,22 @@ class VLLMOrchestrator:
                 val = self.config.get(k)
                 if val is None:
                     continue
-                
+
                 placeholder = f"{{{k}}}"
                 replacement = str(val)
-                
+
                 for target_key, target_val in config_data.items():
                     if isinstance(target_val, str) and placeholder in target_val:
                         # Only replace if it's not a shell variable ${VAR}
                         idx = target_val.find(placeholder)
-                        if idx > 0 and target_val[idx-1] == '$':
+                        if idx > 0 and target_val[idx - 1] == "$":
                             continue
-                        
-                        config_data[target_key] = target_val.replace(placeholder, replacement)
+
+                        config_data[target_key] = target_val.replace(
+                            placeholder, replacement
+                        )
                         changed = True
-            
+
             # Also handle local placeholders within config_data
             for k, val in config_data.items():
                 if val is None:
@@ -738,9 +813,11 @@ class VLLMOrchestrator:
                 for target_key, target_val in config_data.items():
                     if isinstance(target_val, str) and placeholder in target_val:
                         idx = target_val.find(placeholder)
-                        if idx > 0 and target_val[idx-1] == '$':
+                        if idx > 0 and target_val[idx - 1] == "$":
                             continue
-                        config_data[target_key] = target_val.replace(placeholder, replacement)
+                        config_data[target_key] = target_val.replace(
+                            placeholder, replacement
+                        )
                         changed = True
 
             if not changed:
@@ -765,14 +842,25 @@ class VLLMOrchestrator:
         # Update the server_config with the fully expanded values
         self.server_config = DotDict(config_data)
 
-        # Show the expanded configuration and ask for confirmation
+        # Show the expanded configuration
         console.banner(f"Configuration Verification for {name}")
         console.print("\n[bold yellow]Expanded Server Config:[/bold yellow]")
         console.print(self.server_config)
 
-        if not console.ynchoice("\nProceed with this configuration?"):
-            console.print("Backend preparation aborted by user.")
-            return False
+        # Show the sbatch script if applicable
+        launch_mode = self.server_config.get("launch_mode")
+        target_host = self.server_config.get("host")
+        if launch_mode == "sbatch" and target_host == "uva":
+            console.print("\n[bold yellow]Generated Submit Script:[/bold yellow]")
+            vllm_image = self._resolve_vllm_image(self.server_config)
+            sbatch_script = self._generate_sbatch_script(
+                self.server_config, name, vllm_image=vllm_image
+            )
+            console.print(f"\n{sbatch_script}\n")
+
+        # if not console.ynchoice("\nProceed with this configuration?"):
+        #    console.print("Backend preparation aborted by user.")
+        #    return False
 
         config = self.server_config
         target_host = config.get("host")
@@ -793,25 +881,25 @@ class VLLMOrchestrator:
             )
         )
 
-        # 0. VPN Check
-        if target_host not in ["localhost", "127.0.0.1"]:
-            with StopWatch.timer("vpn_check"):
-                console.banner("VPN Connection")
-                console.print("[blue]Checking VPN connection...[/blue]")
-                vpn = Vpn()
-                if not vpn.enabled():
-                    console.msg("VPN is disconnected. Attempting to connect...")
-                    if not vpn.connect():
-                        console.error(
-                            "VPN connection failed. Please connect to the VPN and try again."
-                        )
-                        return False
-                    console.ok("VPN connected successfully!")
-                else:
-                    console.ok("VPN is already active.")
-            console.print(
-                f"[dim]VPN check took: {StopWatch.get('vpn_check'):.2f}s[/dim]"
-            )
+        ## 0. VPN Check
+        # if target_host not in ["localhost", "127.0.0.1"]:
+        #    with StopWatch.timer("vpn_check"):
+        #        console.banner("VPN Connection")
+        #        console.print("[blue]Checking VPN connection...[/blue]")
+        #        vpn = Vpn()
+        #        if not vpn.enabled():
+        #            console.msg("VPN is disconnected. Attempting to connect...")
+        #            if not vpn.connect():
+        #                console.error(
+        #                    "VPN connection failed. Please connect to the VPN and try again."
+        #                )
+        #                return False
+        #            console.ok("VPN connected successfully!")
+        #        else:
+        #            console.ok("VPN is already active.")
+        #    console.print(
+        #        f"[dim]VPN check took: {StopWatch.get('vpn_check'):.2f}s[/dim]"
+        #    )
 
         # 1. Initial Health Check
         console.banner("Initial Health Check")
