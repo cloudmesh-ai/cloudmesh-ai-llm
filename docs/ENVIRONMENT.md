@@ -1,154 +1,62 @@
 # Environment Configuration and Management
 
-This document provides a comprehensive guide to managing environment variables using `.env` files, both locally and on remote servers, via the `cmc env` command suite.
-
-## `cmc env` Command Suite
-
-### Overview
-
-The `cmc env` command suite provides comprehensive environment variable management for `.env` files across local and remote systems. It is now fully implemented and integrated with the cloudmesh CLI.
-
-### Implemented Commands
-
-| Command | Description | Status |
-|---------|-------------|--------|
-| `cmc env probe [HOST]` | Compare local .env with remote (local-only if no host) | ✅ Implemented |
-| `cmc env sync HOST` | Merge local into remote intelligently | ✅ Implemented |
-| `cmc env cp HOST` | Copy local to remote (destructive) | ✅ Implemented |
-| `cmc env secure [HOST]` | Set file permissions to 600 (local if no host) | ✅ Implemented |
-| `cmc env validate [HOST]` | Check for security issues (local if no host) | ✅ Implemented |
-| `cmc env edit [HOST]` | Edit local or remote .env file | ✅ Implemented |
-| `cmc env cat [HOST]` | Display .env contents (with security warning) | ✅ Implemented |
-| `cmc env diff HOST` | Show detailed differences | ✅ Implemented |
-
-### Key Features
-
-#### 1. EnvManager Class (`src/cloudmesh/ai/vllm/env_manager.py`)
-
-**Core Methods:**
-- `probe()` - Compare local and remote .env files
-- `sync()` - Intelligent 3-way merge with conflict resolution
-- `copy()` - Copy with backup and permission management
-- `secure()` - Set permissions to 600
-- `validate()` - Check permissions and security issues
-- `edit_remote()` - Download, edit, upload workflow
-
-**Security Features:**
-- Automatic permission setting (600) on remote files
-- Secret masking (shows `***` for API keys, tokens, passwords)
-- Empty secret detection
-- URL credential exposure warnings
-- Backup creation before modifications
-
-#### 2. CLI Integration (`src/cloudmesh/ai/command/env.py`)
-
-**Command Options:**
-```bash
-# Probe with different output formats
-cmc env probe uva --format table|json|yaml
-
-# Sync with merge strategies
-cmc env sync uva --strategy local_wins|remote_wins|ask
-cmc env sync uva --dry-run  # Preview changes
-
-# Copy with safety options
-cmc env cp uva --force --backup
-cmc env cp uva --no-backup
-
-# Validate and fix
-cmc env validate --fix
-```
-
-### Usage Examples
-
-```bash
-# Show local .env info only (no host specified)
-cmc env probe
-
-# Compare local .env with UVA
-cmc env probe uva
-
-# Preview sync without applying
-cmc env sync uva --dry-run
-
-# Sync with interactive conflict resolution
-cmc env sync uva --strategy ask
-
-# Copy to remote (destructive)
-cmc env cp uva --backup
-
-# Secure local file
-cmc env secure
-
-# Secure remote file
-cmc env secure uva
-
-# Validate local file
-cmc env validate
-
-# Validate remote file
-cmc env validate uva
-
-# Validate and fix issues
-cmc env validate --fix
-
-# Edit local .env file
-cmc env edit
-
-# Edit remote file locally
-cmc env edit uva
-
-# Edit remote, copy from local if missing
-cmc env edit uva -l .env.production
-
-# Show differences only
-cmc env diff uva
-
-# Show actual values (careful with secrets!)
-cmc env diff uva --show
-
-# Display .env contents (with security confirmation)
-cmc env cat                    # Display local .env with warning
-cmc env cat uva                # Display remote .env on uva
-cmc env cat -l .env.production # Display specific local file
-```
+This manual provides a comprehensive guide to managing environment variables using `.env` files for `cloudmesh-ai-llm`. It is designed to serve as both a **User Manual** for daily operations and a **Developer Guide** for technical integration.
 
 ---
 
-## Configuration Guide
-
-This section explains how to use `.env` files locally and deploy them to remote servers with cloudmesh-ai-llm.
-
-### Overview
-
-The cloudmesh-ai-llm system supports environment variable configuration through `.env` files. This allows you to:
-
-1. **Keep secrets out of version control** - Store API keys, passwords, and other sensitive data in `.env` files
-2. **Easily switch environments** - Use `.env.local`, `.env.production`, etc.
-3. **Deploy to remote servers** - Automatically sync `.env` files to remote hosts via SSH
-4. **Override YAML configuration** - Environment variables take precedence over YAML config values
+## User Guide
 
 ### Quick Start
 
-#### 1. Create your .env file
+To get started with environment variables, follow these three simple steps:
 
+#### 1. Setup your `.env` file
+Create a local `.env` file from the provided template:
 ```bash
 cp .env.template .env
-# Edit .env with your actual values
+# Edit .env with your actual API keys and settings
 ```
 
-#### 2. Load environment variables in your code
+**Recommended `.env` Template:**
+```bash
+# VLLM / API Configuration
+VLLM_API_KEY=your_api_key_here
+VLLM_MODEL=gemma
+VLLM_GPU_MEMORY_UTILIZATION=0.9
+VLLM_MAX_MODEL_LEN=4096
+VLLM_TENSOR_PARALLEL_SIZE=1
+VLLM_DTYPE=auto
 
+# Cloudmesh Configuration
+CLOUDMESH_AI_USER=your_username
+CLOUDMESH_AI_HOST=localhost
+CLOUDMESH_AI_PORT=8000
+CLOUDMESH_AI_API_KEY=your_api_key_here
+
+# SSH Configuration (for remote deployments)
+SSH_HOST=your_remote_host
+SSH_USER=your_username
+SSH_KEY_PATH=~/.ssh/id_rsa
+
+# Docker Configuration
+DOCKER_IMAGE=vllm/vllm-openai:latest
+DOCKER_CONTAINER_NAME=vllm-server
+DOCKER_NETWORK=host
+
+# Development
+DEBUG=false
+LOG_LEVEL=INFO
+```
+
+#### 2. Load variables in Python
 ```python
 from cloudmesh.ai.vllm.config import VLLMConfig
 
-# Create config and merge .env variables
 config = VLLMConfig()
-config.merge_env_vars()  # Loads from .env file
+config.merge_env_vars()  # Automatically loads from .env
 ```
 
-#### 3. Deploy to remote server
-
+#### 3. Deploy to a remote server
 ```python
 from cloudmesh.ai.vllm.server_uva import UVAServer
 
@@ -156,406 +64,176 @@ server = UVAServer(host="uva")
 server.deploy_with_env("gemma", local_env_path=".env")
 ```
 
-### Local Development
+### `cmc env` Command Reference
 
-#### Loading .env Files
+The `cmc env` suite manages `.env` files across local and remote environments.
 
-```python
-from cloudmesh.ai.vllm.config import VLLMConfig
+| Command | Description | Common Flags | Status |
+| :--- | :--- | :--- | :---: |
+| `probe [HOST]` | Compare local `.env` with remote | `--format table\|json\|yaml` | ✅ |
+| `sync HOST` | Intelligent merge of local into remote | `--strategy local_wins\|remote_wins\|ask` `--dry-run` | ✅ |
+| `cp HOST` | Destructive copy local $\rightarrow$ remote | `--force` `--backup` `--no-backup` | ✅ |
+| `secure [HOST]` | Set file permissions to `600` | *(None)* | ✅ |
+| `validate [HOST]` | Security and permission check | `--fix` | ✅ |
+| `edit [HOST]` | Interactive edit (downloads $\rightarrow$ edits $\rightarrow$ uploads) | `-l [LOCAL_FILE]` | ✅ |
+| `cat [HOST]` | Display contents with security warning | `-l [LOCAL_FILE]` | ✅ |
+| `diff HOST` | Show detailed differences | `--show` (reveals secrets) | ✅ |
 
-# Method 1: Load from default .env file
-config = VLLMConfig()
-config.merge_env_vars()
+### Detailed Usage Examples
 
-# Method 2: Load from specific file
-config.merge_env_vars(env_file=".env.local")
-
-# Method 3: Load as dictionary without modifying current config
-env_vars = VLLMConfig.load_env_file(".env.production")
-print(env_vars)
-```
-
-#### Available Environment Variables
-
-| Variable | Description | Example |
-|----------|-------------|---------|
-| `VLLM_API_KEY` | API key for vLLM authentication | `sk-abc123` |
-| `VLLM_MODEL` | Model name to use | `gemma` or `meta-llama/Meta-Llama-3-8B-Instruct` |
-| `VLLM_GPU_MEMORY_UTILIZATION` | GPU memory fraction (0.0-1.0) | `0.9` |
-| `VLLM_MAX_MODEL_LEN` | Maximum sequence length | `4096` |
-| `VLLM_TENSOR_PARALLEL_SIZE` | Number of GPUs for tensor parallelism | `1` |
-| `VLLM_DTYPE` | Data type for model weights | `auto`, `float16`, `bfloat16` |
-| `CLOUDMESH_AI_USER` | Username for SSH connections | `your_username` |
-| `CLOUDMESH_AI_HOST` | Host for server connection | `localhost` or `remote.server.com` |
-| `CLOUDMESH_AI_PORT` | Port for server connection | `8000` |
-
-#### Nested Configuration with Double Underscores
-
-Environment variables can override nested YAML configuration using double underscores (`__`):
-
+#### Comparison and Syncing
 ```bash
-# YAML path: cloudmesh.ai.server.uva.gemma.remote_port
-CLOUDMESH_AI_SERVER__UVA__GEMMA__REMOTE_PORT=8001
+# Compare local .env with UVA server
+cmc env probe uva
 
-# YAML path: cloudmesh.ai.server.uva.llama3.model
-CLOUDMESH_AI_SERVER__UVA__LLAMA3__MODEL=meta-llama/Meta-Llama-3-8B-Instruct
+# Preview a sync without applying changes
+cmc env sync uva --dry-run
+
+# Sync with interactive conflict resolution
+cmc env sync uva --strategy ask
 ```
 
-### Remote Deployment
+#### Security and Maintenance
+```bash
+# Secure local .env file (chmod 600)
+cmc env secure
 
-#### Upload .env to Remote Server
-
-```python
-from cloudmesh.ai.vllm.server_uva import UVAServer
-
-server = UVAServer(host="uva", launch_mode="remote")
-
-# Upload .env file to remote server
-success = server.upload_env_file(
-    local_env_path=".env",
-    remote_env_path="~/.cloudmesh/.env"
-)
+# Validate remote file and automatically fix permission issues
+cmc env validate uva --fix
 ```
 
-#### Run Commands with Environment Variables
+#### Content Management
+```bash
+# Edit remote file using local editor
+cmc env edit uva
 
-```python
-# Execute command with sourced env file
-result = server.run_with_env(
-    command="python -c 'import os; print(os.getenv(\"VLLM_API_KEY\"))'",
-    env_path="~/.cloudmesh/.env"
-)
-print(result.stdout)
+# Display remote .env content on uva
+cmc env cat uva
 ```
-
-#### Full Deployment with .env
-
-```python
-# Deploy server with environment configuration
-server.deploy_with_env(
-    name="gemma",
-    local_env_path=".env",
-    sbatch=False
-)
-```
-
-This will:
-1. Upload `.env` to `~/.cloudmesh/.env_gemma` on the remote server
-2. Merge environment variables into the configuration
-3. Start the vLLM server
-
-### Docker Integration
-
-#### Using .env with Docker Run
-
-```python
-from cloudmesh.ai.vllm.docker_manager import DockerManager
-
-docker = DockerManager()
-
-# Run container with env file
-docker.run_with_env_file(
-    image="vllm/vllm-openai:latest",
-    container_name="vllm-server",
-    env_file=".env",
-    ports={8000: 8000},
-    volumes={"/models": "/models"},
-    VLLM_MODEL="gemma"
-)
-```
-
-#### Using .env with Docker Compose
-
-```python
-from cloudmesh.ai.vllm.docker_manager import DockerManager
-
-docker = DockerManager()
-
-# Start compose with env file
-docker.run_compose_with_env(
-    compose_file="docker-compose.yml",
-    env_file=".env",
-    service="litellm",
-    detach=True
-)
-```
-
-#### Generating Docker .env Files
-
-```python
-from cloudmesh.ai.vllm.docker_manager import DockerManager
-from cloudmesh.ai.vllm.config import VLLMConfig
-
-config = VLLMConfig()
-docker = DockerManager()
-
-# Generate .env from current config
-docker.generate_docker_env_file(
-    config=config.to_dict(),
-    output_path="docker/.env"
-)
-```
-
-### Environment Variable Reference
-
-#### VLLM Configuration
-
-| Variable | Type | Default | Description |
-|----------|------|---------|-------------|
-| `VLLM_API_KEY` | string | - | Authentication key |
-| `VLLM_MODEL` | string | - | Model identifier |
-| `VLLM_GPU_MEMORY_UTILIZATION` | float | 0.9 | GPU memory fraction |
-| `VLLM_MAX_MODEL_LEN` | int | 4096 | Max sequence length |
-| `VLLM_TENSOR_PARALLEL_SIZE` | int | 1 | GPU count for parallelism |
-| `VLLM_DTYPE` | string | auto | Model dtype |
-| `VLLM_QUANTIZATION` | string | - | Quantization method |
-| `VLLM_MAX_NUM_SEQS` | int | 256 | Max concurrent sequences |
-| `VLLM_ENFORCE_EAGER` | bool | false | Disable CUDA graph |
-
-#### Cloudmesh Configuration
-
-| Variable | Type | Description |
-|----------|------|-------------|
-| `CLOUDMESH_AI_API_KEY` | string | API key (alternative to VLLM_API_KEY) |
-| `CLOUDMESH_AI_HOST` | string | Server hostname/IP |
-| `CLOUDMESH_AI_PORT` | int | Server port |
-| `CLOUDMESH_AI_USER` | string | SSH username |
-| `CLOUDMESH_USER_CONFIG_PATH` | string | Path to YAML config file |
-
-#### SSH Configuration
-
-| Variable | Type | Description |
-|----------|------|-------------|
-| `SSH_HOST` | string | SSH host alias |
-| `SSH_USER` | string | SSH username |
-| `SSH_KEY_PATH` | string | Path to SSH private key |
-| `SSH_PORT` | int | SSH port (default: 22) |
-
-#### Docker Configuration
-
-| Variable | Type | Description |
-|----------|------|-------------|
-| `DOCKER_IMAGE` | string | Docker image name |
-| `DOCKER_CONTAINER_NAME` | string | Container name |
-| `DOCKER_NETWORK` | string | Network mode |
 
 ---
 
-## Best Practices
+## Configuration Reference
 
-### 1. Never Commit .env Files
+### Environment Variable Table
 
-Your `.gitignore` is already configured to exclude `.env` files:
+| Variable | Type | Default | Description |
+| :--- | :---: | :---: | :--- |
+| **VLLM Configuration** | | | |
+| `VLLM_API_KEY` | string | - | Authentication key for vLLM server |
+| `VLLM_MODEL` | string | - | Model identifier (e.g., `gemma`) |
+| `VLLM_GPU_MEMORY_UTILIZATION` | float | `0.9` | GPU memory fraction (0.0-1.0) |
+| `VLLM_MAX_MODEL_LEN` | int | `4096` | Maximum sequence length |
+| `VLLM_TENSOR_PARALLEL_SIZE` | int | `1` | Number of GPUs for parallelism |
+| `VLLM_DTYPE` | string | `auto` | Weights data type (`float16`, `bfloat16`) |
+| **Cloudmesh Configuration** | | | |
+| `CLOUDMESH_AI_USER` | string | - | SSH username |
+| `CLOUDMESH_AI_HOST` | string | - | Server hostname/IP |
+| `CLOUDMESH_AI_PORT` | int | `8000` | Server port |
+| `CLOUDMESH_AI_API_KEY` | string | - | Alternative to `VLLM_API_KEY` |
+| **SSH Configuration** | | | |
+| `SSH_HOST` | string | - | SSH host alias from `~/.ssh/config` |
+| `SSH_USER` | string | - | SSH username |
+| `SSH_KEY_PATH` | string | - | Path to private key |
+| **Docker Configuration** | | | |
+| `DOCKER_IMAGE` | string | - | Docker image name |
+| `DOCKER_CONTAINER_NAME` | string | - | Container name |
+| `DOCKER_NETWORK` | string | - | Network mode |
 
-```gitignore
-.env
-.env.local
-.env.development
-.env.test
-.env.production
-.env.*.local
-```
+### Nested Configuration (Double Underscores)
 
-### 2. Use .env.template
+Environment variables can override deeply nested YAML configuration paths by replacing dots with double underscores (`__`).
 
-Always commit `.env.template` with example values (no real secrets):
+**Example Mapping:**
+*   **YAML Path:** `cloudmesh.ai.server.uva.gemma.remote_port`
+*   **Env Var:** `CLOUDMESH_AI_SERVER__UVA__GEMMA__REMOTE_PORT=8001`
 
-```bash
-cp .env.template .env
-# Edit .env with real values
-```
+---
 
-### 3. Separate Environments
+## Technical & Developer Guide
 
-```bash
-.env              # Default (local development)
-.env.local        # Local overrides (not committed)
-.env.production   # Production settings (not committed)
-.env.template     # Template committed to version control
-```
+### Internal Architecture
 
-### 4. Secure Remote .env Files
+The core logic resides in the `EnvManager` class (`src/cloudmesh/ai/vllm/env_manager.py`).
 
-After deploying to remote servers:
+**Key Operational Workflows:**
+*   **Intelligent Sync**: Implements a 3-way merge logic to prevent accidental overwrites of remote-only variables.
+*   **Security Layer**: Every remote write operation automatically triggers a `chmod 600` to protect secrets.
+*   **Secret Masking**: The `cat` and `diff` commands pass content through a masking filter that replaces sensitive patterns (API keys, tokens) with `***`.
 
-```bash
-ssh user@remote "chmod 600 ~/.cloudmesh/.env"
-```
+### Infrastructure Integration
 
-### 5. Python-dotenv
+#### SSH Operations
+Remote management is handled via SCP and SSH. The system checks for file existence and current permissions before attempting modifications to ensure minimal disruption.
 
-The `python-dotenv` package is included as a required dependency in `pyproject.toml`. It is used automatically when loading environment files.
+#### Docker Integration
+The `DockerManager` leverages the `--env-file` flag of the Docker CLI.
+*   **Runtime**: `docker run --env-file .env ...`
+*   **Compose**: `docker-compose --env-file .env up`
+*   **Generation**: The system can export the current `VLLMConfig` directly into a Docker-compatible `.env` file.
 
-### 6. Validate Environment Variables
+---
 
-```python
-from cloudmesh.ai.vllm.config import VLLMConfig
+## Best Practices & Security
 
-config = VLLMConfig()
-config.merge_env_vars()
+> [!IMPORTANT]
+> **Never commit `.env` files to version control.** Your `.gitignore` is pre-configured to exclude all `.env*` files.
 
-# Check required variables
-required = ['VLLM_API_KEY', 'VLLM_MODEL']
-missing = [var for var in required if not os.getenv(var)]
-if missing:
-    raise ValueError(f"Missing required env vars: {missing}")
-```
+*   **Use Templates**: Always provide a `.env.template` with dummy values for other developers.
+*   **Permission Strictness**: Always ensure remote `.env` files are set to `600`. Use `cmc env secure [HOST]` to enforce this.
+*   **Environment Separation**: Maintain separate files for different stages:
+    *   `.env.local` $\rightarrow$ Local development
+    *   `.env.staging` $\rightarrow$ Staging server
+    *   `.env.production` $\rightarrow$ Production server
 
 ---
 
 ## Troubleshooting
 
-### Issue: python-dotenv import error
-
-```
-ImportError: python-dotenv is required for .env file support.
-```
-
-**Solution:**
-This should not occur as `python-dotenv` is a required dependency. If you see this error, reinstall the package:
-
-```bash
-pip install --force-reinstall cloudmesh-ai-llm
-```
-
-### Issue: .env file not found
-
-```
-FileNotFoundError: [Errno 2] No such file or directory: '.env'
-```
-
-**Solution:**
-```bash
-# Create from template
-cp .env.template .env
-# Or specify full path
-config.merge_env_vars(env_file="/full/path/to/.env")
-```
-
-### Issue: Environment variables not overriding config
-
-**Check:**
-1. Variable names match exactly (case-sensitive)
-2. Using correct format for nested config (double underscores)
-3. `merge_env_vars()` was called after VLLMConfig initialization
-
-```python
-config = VLLMConfig()
-config.merge_env_vars()  # Must call this!
-print(config.get('cloudmesh.ai.api_key'))  # Should show env value
-```
-
-### Issue: Remote upload fails
-
-**Check SSH connectivity:**
-```bash
-ssh user@remote "echo 'SSH works'"
-```
-
-**Check file permissions:**
-```bash
-ls -la .env
-# Should be readable by current user
-```
-
-**Use absolute paths:**
-```python
-server.upload_env_file(
-    local_env_path=os.path.abspath(".env"),
-    remote_env_path="/home/user/.cloudmesh/.env"
-)
-```
-
-### Issue: Docker container can't read .env
-
-**Ensure .env is in build context:**
-```dockerfile
-# Dockerfile
-COPY .env /app/.env
-```
-
-**Or mount at runtime:**
-```bash
-docker run --env-file .env myimage
-```
+| Issue | Likely Cause | Solution |
+| :--- | :--- | :--- |
+| `ImportError: python-dotenv` | Missing dependency | `pip install --force-reinstall cloudmesh-ai-llm` |
+| `FileNotFoundError: .env` | Missing file | `cp .env.template .env` |
+| Config not overriding YAML | Case mismatch or missing call | Ensure `config.merge_env_vars()` is called after initialization. |
+| Remote upload fails | SSH Connectivity | Verify access: `ssh user@remote "echo 'SSH works'"` |
 
 ---
 
 ## Example Workflows
 
-### Workflow 1: Local Development with .env
-
+### Workflow 1: Local Setup
 ```bash
-# 1. Set up environment
 cp .env.template .env
-# Edit .env with your API keys and settings
-
-# 2. Run locally
-python -c "
-from cloudmesh.ai.vllm.config import VLLMConfig
-config = VLLMConfig()
-config.merge_env_vars()
-print(f'Model: {config.get(\"cloudmesh.ai.model\")}')
-"
+# Edit .env with your keys
+python -c "from cloudmesh.ai.vllm.config import VLLMConfig; c=VLLMConfig(); c.merge_env_vars(); print(c.get('cloudmesh.ai.model'))"
 ```
 
-### Workflow 2: Deploy to Multiple Environments
-
+### Workflow 2: Multi-Environment Deployment
 ```python
 # deploy.py
 import sys
 from cloudmesh.ai.vllm.server_uva import UVAServer
 
-environment = sys.argv[1]  # 'staging' or 'production'
-
-server = UVAServer(host=f"uva-{environment}")
-server.deploy_with_env(
-    name="gemma",
-    local_env_path=f".env.{environment}"
-)
+env = sys.argv[1] # 'staging' or 'production'
+server = UVAServer(host=f"uva-{env}")
+server.deploy_with_env("gemma", local_env_path=f".env.{env}")
 ```
 
-```bash
-# Deploy to staging
-python deploy.py staging
-
-# Deploy to production
-python deploy.py production
-```
-
-### Workflow 3: CI/CD with GitHub Secrets
-
+### Workflow 3: CI/CD Integration
+In GitHub Actions, use secrets to generate the file on the fly:
 ```yaml
-# .github/workflows/deploy.yml
-name: Deploy
-
-on: [push]
-
-jobs:
-  deploy:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      
-      - name: Create .env file
-        run: |
-          echo "VLLM_API_KEY=${{ secrets.VLLM_API_KEY }}" >> .env
-          echo "VLLM_MODEL=${{ vars.VLLM_MODEL }}" >> .env
-      
-      - name: Deploy to remote
-        run: python deploy.py production
+- name: Create .env file
+  run: |
+    echo "VLLM_API_KEY=${{ secrets.VLLM_API_KEY }}" >> .env
+    echo "VLLM_MODEL=${{ vars.VLLM_MODEL }}" >> .env
 ```
 
 ---
 
 ## Summary
 
-The `.env` file support in cloudmesh-ai-llm provides:
-
-1. ✅ **Local config management** - Easy YAML overrides with env vars
-2. ✅ **Remote deployment** - Automatic .env file sync via SSH/SCP
-3. ✅ **Docker integration** - Native `--env-file` support
-4. ✅ **Security** - Keep secrets out of version control
-5. ✅ **Flexibility** - Environment-specific configurations
-
-For questions or issues, refer to the main project documentation or open an issue.
+The environment system provides a secure, flexible bridge between local development and remote deployment:
+1. ✅ **Local**: Easy YAML overrides.
+2. ✅ **Remote**: Automatic SSH/SCP sync.
+3. ✅ **Docker**: Native environment file support.
+4. ✅ **Security**: Secret masking and forced permissions.
