@@ -6,8 +6,7 @@ nav:
 - Documents:
   - README: readme.md
   - UVA: uva.md
-  - ENV: ENV_CONFIGURATION.md
-  - ENV_COMMAND: ENV_COMMAND_IMPLEMENTATION.md
+  - Environment: ENVIRONMENT.md
   - Cline: cline.md
   - Continue: continue.md
   - Allocation: allocation.md

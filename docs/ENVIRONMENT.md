@@ -1,21 +1,125 @@
-# Remote .env File Configuration Guide
+# Environment Configuration and Management
 
-This guide explains how to use `.env` files locally and deploy them to remote servers with cloudmesh-ai-llm.
+This document provides a comprehensive guide to managing environment variables using `.env` files, both locally and on remote servers, via the `cmc env` command suite.
 
-## Table of Contents
+## `cmc env` Command Suite
 
-- [Overview](#overview)
-- [Quick Start](#quick-start)
-- [Local Development](#local-development)
-- [Remote Deployment](#remote-deployment)
-- [Docker Integration](#docker-integration)
-- [Environment Variable Reference](#environment-variable-reference)
-- [Best Practices](#best-practices)
-- [Troubleshooting](#troubleshooting)
+### Overview
+
+The `cmc env` command suite provides comprehensive environment variable management for `.env` files across local and remote systems. It is now fully implemented and integrated with the cloudmesh CLI.
+
+### Implemented Commands
+
+| Command | Description | Status |
+|---------|-------------|--------|
+| `cmc env probe [HOST]` | Compare local .env with remote (local-only if no host) | ✅ Implemented |
+| `cmc env sync HOST` | Merge local into remote intelligently | ✅ Implemented |
+| `cmc env cp HOST` | Copy local to remote (destructive) | ✅ Implemented |
+| `cmc env secure [HOST]` | Set file permissions to 600 (local if no host) | ✅ Implemented |
+| `cmc env validate [HOST]` | Check for security issues (local if no host) | ✅ Implemented |
+| `cmc env edit [HOST]` | Edit local or remote .env file | ✅ Implemented |
+| `cmc env cat [HOST]` | Display .env contents (with security warning) | ✅ Implemented |
+| `cmc env diff HOST` | Show detailed differences | ✅ Implemented |
+
+### Key Features
+
+#### 1. EnvManager Class (`src/cloudmesh/ai/vllm/env_manager.py`)
+
+**Core Methods:**
+- `probe()` - Compare local and remote .env files
+- `sync()` - Intelligent 3-way merge with conflict resolution
+- `copy()` - Copy with backup and permission management
+- `secure()` - Set permissions to 600
+- `validate()` - Check permissions and security issues
+- `edit_remote()` - Download, edit, upload workflow
+
+**Security Features:**
+- Automatic permission setting (600) on remote files
+- Secret masking (shows `***` for API keys, tokens, passwords)
+- Empty secret detection
+- URL credential exposure warnings
+- Backup creation before modifications
+
+#### 2. CLI Integration (`src/cloudmesh/ai/command/env.py`)
+
+**Command Options:**
+```bash
+# Probe with different output formats
+cmc env probe uva --format table|json|yaml
+
+# Sync with merge strategies
+cmc env sync uva --strategy local_wins|remote_wins|ask
+cmc env sync uva --dry-run  # Preview changes
+
+# Copy with safety options
+cmc env cp uva --force --backup
+cmc env cp uva --no-backup
+
+# Validate and fix
+cmc env validate --fix
+```
+
+### Usage Examples
+
+```bash
+# Show local .env info only (no host specified)
+cmc env probe
+
+# Compare local .env with UVA
+cmc env probe uva
+
+# Preview sync without applying
+cmc env sync uva --dry-run
+
+# Sync with interactive conflict resolution
+cmc env sync uva --strategy ask
+
+# Copy to remote (destructive)
+cmc env cp uva --backup
+
+# Secure local file
+cmc env secure
+
+# Secure remote file
+cmc env secure uva
+
+# Validate local file
+cmc env validate
+
+# Validate remote file
+cmc env validate uva
+
+# Validate and fix issues
+cmc env validate --fix
+
+# Edit local .env file
+cmc env edit
+
+# Edit remote file locally
+cmc env edit uva
+
+# Edit remote, copy from local if missing
+cmc env edit uva -l .env.production
+
+# Show differences only
+cmc env diff uva
+
+# Show actual values (careful with secrets!)
+cmc env diff uva --show
+
+# Display .env contents (with security confirmation)
+cmc env cat                    # Display local .env with warning
+cmc env cat uva                # Display remote .env on uva
+cmc env cat -l .env.production # Display specific local file
+```
 
 ---
 
-## Overview
+## Configuration Guide
+
+This section explains how to use `.env` files locally and deploy them to remote servers with cloudmesh-ai-llm.
+
+### Overview
 
 The cloudmesh-ai-llm system supports environment variable configuration through `.env` files. This allows you to:
 
@@ -24,18 +128,16 @@ The cloudmesh-ai-llm system supports environment variable configuration through 
 3. **Deploy to remote servers** - Automatically sync `.env` files to remote hosts via SSH
 4. **Override YAML configuration** - Environment variables take precedence over YAML config values
 
----
+### Quick Start
 
-## Quick Start
-
-### 1. Create your .env file
+#### 1. Create your .env file
 
 ```bash
 cp .env.template .env
 # Edit .env with your actual values
 ```
 
-### 2. Load environment variables in your code
+#### 2. Load environment variables in your code
 
 ```python
 from cloudmesh.ai.vllm.config import VLLMConfig
@@ -45,7 +147,7 @@ config = VLLMConfig()
 config.merge_env_vars()  # Loads from .env file
 ```
 
-### 3. Deploy to remote server
+#### 3. Deploy to remote server
 
 ```python
 from cloudmesh.ai.vllm.server_uva import UVAServer
@@ -54,11 +156,9 @@ server = UVAServer(host="uva")
 server.deploy_with_env("gemma", local_env_path=".env")
 ```
 
----
+### Local Development
 
-## Local Development
-
-### Loading .env Files
+#### Loading .env Files
 
 ```python
 from cloudmesh.ai.vllm.config import VLLMConfig
@@ -75,7 +175,7 @@ env_vars = VLLMConfig.load_env_file(".env.production")
 print(env_vars)
 ```
 
-### Available Environment Variables
+#### Available Environment Variables
 
 | Variable | Description | Example |
 |----------|-------------|---------|
@@ -89,7 +189,7 @@ print(env_vars)
 | `CLOUDMESH_AI_HOST` | Host for server connection | `localhost` or `remote.server.com` |
 | `CLOUDMESH_AI_PORT` | Port for server connection | `8000` |
 
-### Nested Configuration with Double Underscores
+#### Nested Configuration with Double Underscores
 
 Environment variables can override nested YAML configuration using double underscores (`__`):
 
@@ -101,11 +201,9 @@ CLOUDMESH_AI_SERVER__UVA__GEMMA__REMOTE_PORT=8001
 CLOUDMESH_AI_SERVER__UVA__LLAMA3__MODEL=meta-llama/Meta-Llama-3-8B-Instruct
 ```
 
----
+### Remote Deployment
 
-## Remote Deployment
-
-### Upload .env to Remote Server
+#### Upload .env to Remote Server
 
 ```python
 from cloudmesh.ai.vllm.server_uva import UVAServer
@@ -119,7 +217,7 @@ success = server.upload_env_file(
 )
 ```
 
-### Run Commands with Environment Variables
+#### Run Commands with Environment Variables
 
 ```python
 # Execute command with sourced env file
@@ -130,7 +228,7 @@ result = server.run_with_env(
 print(result.stdout)
 ```
 
-### Full Deployment with .env
+#### Full Deployment with .env
 
 ```python
 # Deploy server with environment configuration
@@ -146,11 +244,9 @@ This will:
 2. Merge environment variables into the configuration
 3. Start the vLLM server
 
----
+### Docker Integration
 
-## Docker Integration
-
-### Using .env with Docker Run
+#### Using .env with Docker Run
 
 ```python
 from cloudmesh.ai.vllm.docker_manager import DockerManager
@@ -168,7 +264,7 @@ docker.run_with_env_file(
 )
 ```
 
-### Using .env with Docker Compose
+#### Using .env with Docker Compose
 
 ```python
 from cloudmesh.ai.vllm.docker_manager import DockerManager
@@ -184,7 +280,7 @@ docker.run_compose_with_env(
 )
 ```
 
-### Generating Docker .env Files
+#### Generating Docker .env Files
 
 ```python
 from cloudmesh.ai.vllm.docker_manager import DockerManager
@@ -200,11 +296,9 @@ docker.generate_docker_env_file(
 )
 ```
 
----
+### Environment Variable Reference
 
-## Environment Variable Reference
-
-### VLLM Configuration
+#### VLLM Configuration
 
 | Variable | Type | Default | Description |
 |----------|------|---------|-------------|
@@ -218,7 +312,7 @@ docker.generate_docker_env_file(
 | `VLLM_MAX_NUM_SEQS` | int | 256 | Max concurrent sequences |
 | `VLLM_ENFORCE_EAGER` | bool | false | Disable CUDA graph |
 
-### Cloudmesh Configuration
+#### Cloudmesh Configuration
 
 | Variable | Type | Description |
 |----------|------|-------------|
@@ -228,7 +322,7 @@ docker.generate_docker_env_file(
 | `CLOUDMESH_AI_USER` | string | SSH username |
 | `CLOUDMESH_USER_CONFIG_PATH` | string | Path to YAML config file |
 
-### SSH Configuration
+#### SSH Configuration
 
 | Variable | Type | Description |
 |----------|------|-------------|
@@ -237,7 +331,7 @@ docker.generate_docker_env_file(
 | `SSH_KEY_PATH` | string | Path to SSH private key |
 | `SSH_PORT` | int | SSH port (default: 22) |
 
-### Docker Configuration
+#### Docker Configuration
 
 | Variable | Type | Description |
 |----------|------|-------------|
