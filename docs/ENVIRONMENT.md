@@ -120,44 +120,44 @@ cmc env edit uva
 cmc env cat uva
 ```
 
-------------------------------------------------------------------------
+## Technical & Developer Guide
 
-## Configuration Reference
+### Configuration Reference
 
-### Environment Variable Table
+#### Environment Variable Table
 
 | Variable | Type | Default | Description |
-|:----------------|:-----------------:|:-----------------:|:----------------|
-| **VLLM Configuration** |  |  |  |
-| `VLLM_API_KEY` | string | \- | Authentication key for vLLM server |
-| `VLLM_MODEL` | string | \- | Model identifier (e.g., `gemma`) |
+| :--- | :---: | :---: | :--- |
+| **VLLM Configuration** | | | |
+| `VLLM_API_KEY` | string | - | Authentication key for vLLM server |
+| `VLLM_MODEL` | string | - | Model identifier (e.g., `gemma`) |
 | `VLLM_GPU_MEMORY_UTILIZATION` | float | `0.9` | GPU memory fraction (0.0-1.0) |
 | `VLLM_MAX_MODEL_LEN` | int | `4096` | Maximum sequence length |
 | `VLLM_TENSOR_PARALLEL_SIZE` | int | `1` | Number of GPUs for parallelism |
 | `VLLM_DTYPE` | string | `auto` | Weights data type (`float16`, `bfloat16`) |
-| **Cloudmesh Configuration** |  |  |  |
-| `CLOUDMESH_AI_USER` | string | \- | SSH username |
-| `CLOUDMESH_AI_HOST` | string | \- | Server hostname/IP |
+| **Cloudmesh Configuration** | | | |
+| `CLOUDMESH_AI_USER` | string | - | SSH username |
+| `CLOUDMESH_AI_HOST` | string | - | Server hostname/IP |
 | `CLOUDMESH_AI_PORT` | int | `8000` | Server port |
-| `CLOUDMESH_AI_API_KEY` | string | \- | Alternative to `VLLM_API_KEY` |
-| **SSH Configuration** |  |  |  |
-| `SSH_HOST` | string | \- | SSH host alias from `~/.ssh/config` |
-| `SSH_USER` | string | \- | SSH username |
-| `SSH_KEY_PATH` | string | \- | Path to private key |
-| **Docker Configuration** |  |  |  |
-| `DOCKER_IMAGE` | string | \- | Docker image name |
-| `DOCKER_CONTAINER_NAME` | string | \- | Container name |
-| `DOCKER_NETWORK` | string | \- | Network mode |
+| `CLOUDMESH_AI_API_KEY` | string | - | Alternative to `VLLM_API_KEY` |
+| **SSH Configuration** | | | |
+| `SSH_HOST` | string | - | SSH host alias from `~/.ssh/config` |
+| `SSH_USER` | string | - | SSH username |
+| `SSH_KEY_PATH` | string | - | Path to private key |
+| **Docker Configuration** | | | |
+| `DOCKER_IMAGE` | string | - | Docker image name |
+| `DOCKER_CONTAINER_NAME` | string | - | Container name |
+| `DOCKER_NETWORK` | string | - | Network mode |
 
-### Nested Configuration (Double Underscores)
+#### Nested Configuration (Double Underscores)
 
 Environment variables can override deeply nested YAML configuration paths by replacing dots with double underscores (`__`).
 
-**Example Mapping:** \* **YAML Path:** `cloudmesh.ai.server.uva.gemma.remote_port` \* **Env Var:** `CLOUDMESH_AI_SERVER__UVA__GEMMA__REMOTE_PORT=8001`
+**Example Mapping:**
+*   **YAML Path:** `cloudmesh.ai.server.uva.gemma.remote_port`
+*   **Env Var:** `CLOUDMESH_AI_SERVER__UVA__GEMMA__REMOTE_PORT=8001`
 
-------------------------------------------------------------------------
-
-## Technical & Developer Guide
+---
 
 ### Internal Architecture
 
