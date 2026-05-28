@@ -5,7 +5,13 @@ nav:
 - Home: index.md
 - Documents:
   - README: readme.md
-  - uva: uva.md
+  - UVA: uva.md
+  - ENV: ENV_CONFIGURATION.md
+  - ENV_COMMAND: ENV_COMMAND_IMPLEMENTATION.md
+  - Cline: cline.md
+  - Continue: continue.md
+  - Allocation: allocation.md
+  - api: api.md
 - Project:
   - Changelog: CHANGELOG.md
   - GitHub: https://github.com/cloudmesh-ai/cloudmesh-ai-llm

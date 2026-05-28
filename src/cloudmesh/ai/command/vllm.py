@@ -73,6 +73,8 @@ from cloudmesh.ai.vllm.client import VLLMClient
 from cloudmesh.ai.vllm.ijob import IJob
 from cloudmesh.ai.vllm.orchestrator import VLLMOrchestrator, get_default_host, get_server, get_vllm_api_key
 from cloudmesh.ai.command.env import env_group
+from cloudmesh.ai.command.cline import cline_group
+from cloudmesh.ai.command.continue_cmd import continue_group
 
 class RenderVLLMTable:
     """Helper class to render vLLM configurations into a Textual DataTable."""
@@ -437,6 +439,57 @@ def logs(name):
     except Exception as e:
         console.error(f"Error retrieving logs: {e}")
 
+@llm_group.command(name="get")
+@click.argument("name")
+def get_config(name):
+    """Get configuration for a specific LLM profile (server or client)."""
+    try:
+        config_path = os.path.expanduser("~/.config/cloudmesh/llm.yaml")
+        if os.path.exists(config_path):
+            with open(config_path, 'r') as f:
+                db = DotDict(yaml.safe_load(f) or {})
+        else:
+            db = DotDict()
+
+        # Search in servers and clients
+        servers = db.get("cloudmesh.ai.server", {})
+        clients = db.get("cloudmesh.ai.client", {})
+        
+        profile_data = None
+        profile_type = None
+
+        if isinstance(servers, dict) and name in servers:
+            profile_data = servers[name]
+            profile_type = "server"
+        elif isinstance(clients, dict) and name in clients:
+            profile_data = clients[name]
+            profile_type = "client"
+
+        if profile_data:
+            banner_title = f"LLM {profile_type.capitalize()} Profile: {name}"
+            # Convert to dict if it's a DotDict for clean printing
+            data_to_print = profile_data.to_dict() if hasattr(profile_data, 'to_dict') else profile_data
+            
+            # Start with the config file path
+            lines = [f"Config File: {config_path}"]
+            lines.extend([f"{k}: {v}" for k, v in data_to_print.items()])
+            formatted_data = "\n".join(lines)
+            
+            console.print(banner(banner_title, formatted_data))
+        else:
+            # Collect available profiles for a helpful error message
+            available = []
+            if isinstance(servers, dict): available.extend([f"server.{k}" for k in servers.keys()])
+            if isinstance(clients, dict): available.extend([f"client.{k}" for k in clients.keys()])
+            
+            error_msg = f"Profile '{name}' not found in configuration."
+            if available:
+                error_msg += "\nAvailable profiles:\n" + "\n".join(sorted(available))
+            console.error(error_msg)
+
+    except Exception as e:
+        console.error(f"Error retrieving profile '{name}': {e}")
+
 @llm_group.command(name="list")
 @click.argument("key", required=False)
 def list_config(key):
@@ -627,6 +680,8 @@ def stop_tunnel(name):
         console.error(f"Unexpected error stopping tunnel: {e}")
 
 llm_group.add_command(tunnel_group, name="tunnel")
+llm_group.add_command(cline_group)
+llm_group.add_command(continue_group)
 
 @llm_group.command(name="default")
 @click.argument("type", type=click.Choice(['server', 'client'], case_sensitive=False))

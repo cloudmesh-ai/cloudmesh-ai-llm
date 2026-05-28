@@ -3,16 +3,17 @@ cloudmesh:
     server:
       uva:
         gemma-4-31b:
-          launch_mode: sbatch
+          launch_mode: "sbatch"
           account: "bii_dsc_community"
           partition: "bii-gpu"
           reservation: "bi_fox_dgx"
-          gres: "gpu:a100:4"
           cpus: 4
+          gpus: 4
+          gres: "gpu:a100:{gpus}"
+          tensor_parallel_size: "{gpus}"
           mem: "64G"
           image: "/scratch/thf2bn/vllm_gemma4.sif"
           model: "google/gemma-4-31B-it"
-          tensor_parallel_size: 4
           gpu_memory_utilization: 0.90
           max_model_len: 32768
           cache_dir: "/scratch/$USER/hf_cache"
@@ -21,15 +22,16 @@ cloudmesh:
           user: '{~/.ssh/config:uva.user}'
 
         gemma-4-9b:
-          launch_mode: sbatch
+          launch_mode: "sbatch"
           account: "bii_dsc_community"
           partition: "bii-gpu"
-          gres: "gpu:a100:1"
           cpus: 2
+          gpus: 1
+          gres: "gpu:a100:{gpus}"
+          tensor_parallel_size: "{gpus}"
           mem: "32G"
           image: "/scratch/thf2bn/vllm_gemma9.sif"
           model: "google/gemma-4-9B-it"
-          tensor_parallel_size: 1
           gpu_memory_utilization: 0.90
           max_model_len: 16384
           cache_dir: "/scratch/$USER/hf_cache"
@@ -38,15 +40,16 @@ cloudmesh:
           user: '{~/.ssh/config:uva.user}'
 
         gemma-4:
-          launch_mode: sbatch
+          launch_mode: "sbatch"
           account: "bii_dsc_community"
           partition: "bii-gpu"
-          gres: "gpu:a100:4"
           cpus: 4
+          gpus: 4
+          gres: "gpu:a100:{gpus}"
+          tensor_parallel_size: "{gpus}"
           mem: "64G"
           image: "/scratch/thf2bn/vllm_gemma4.sif"
           model: "google/gemma-4-31B-it"
-          tensor_parallel_size: 4
           gpu_memory_utilization: 0.90
           max_model_len: 32768
           cache_dir: "/scratch/$USER/hf_cache"
@@ -55,16 +58,17 @@ cloudmesh:
           user: '{~/.ssh/config:uva.user}'
 
         coder-qwen:
-          launch_mode: sbatch
+          launch_mode: "sbatch"
           account: "bii_dsc_community"
           partition: "bii-gpu"
           reservation: "bi_fox_dgx"
-          gres: "gpu:a100:4"
           cpus: 4
+          gpus: 4
+          gres: "gpu:a100:{gpus}"
+          tensor_parallel_size: "{gpus}"
           mem: "64G"
           image: "/scratch/thf2bn/vllm_qwen_coder.sif"
           model: "Qwen/Qwen2.5-Coder-70B-Instruct"
-          tensor_parallel_size: 4
           gpu_memory_utilization: 0.90
           max_model_len: 32768
           cache_dir: "/scratch/$USER/hf_cache"
@@ -73,20 +77,23 @@ cloudmesh:
           user: '{~/.ssh/config:uva.user}'
 
         plan-mode:
-          launch_mode: sbatch
+          max_model_len: 32768
+          launch_mode: "sbatch"
           account: "bii_dsc_community"
           partition: "bii-gpu"
           reservation: "bi_fox_dgx"
-          gres: "gpu:a100:4"
           cpus: 4
+          gpus: 4
+          gres: "gpu:a100:{gpus}"
+          tensor_parallel_size: "{gpus}"
           mem: "64G"
           image: "/scratch/thf2bn/vllm_deepseek_r1.sif"
           model: "deepseek-ai/DeepSeek-R1"
           extra_args: |
-            --tensor-parallel-size 4
+            --tensor-parallel-size {tensor_parallel_size}
             --gpu-memory-utilization 0.90
             --max-model-len 32768
-            --max-num-batched-tokens 32768
+            --max-num-batched-tokens {max_model_len}
             --enforce-eager
             --trust-remote-code
             --enable-chunked-prefill
@@ -97,14 +104,16 @@ cloudmesh:
           user: '{~/.ssh/config:uva.user}'
 
         gemma2:
+          max_model_len: 131072
           name: "vllm_gemma_{remote_port}"
-          launch_mode: sbatch
+          launch_mode: "sbatch"
           account: "bii_dsc_community"
           partition: "bii-gpu"
           reservation: "bi_fox_dgx"
-          gres: "gpu:a100:2"
           cpus: 2
           gpus: 2
+          gres: "gpu:a100:{gpus}"
+          tensor_parallel_size: "{gpus}"
           mem: "96G"
           image: "/scratch/thf2bn/vllm_gemma4.sif"
           model: "google/gemma-4-31B-it"
@@ -126,10 +135,10 @@ cloudmesh:
               --env VLLM_API_KEY="${VLLM_API_KEY}" \
               {image} \
               --model {model} \
-              --tensor-parallel-size {gpus} \
+              --tensor-parallel-size {tensor_parallel_size} \
               --gpu-memory-utilization 0.95 \
-              --max-model-len 131072 \
-              --quantization fp8 \
+               --max-model-len {max_model_len} \
+               --quantization fp8 \
               --kv-cache-dtype fp8 \
               --enable-prefix-caching \
               --enable-chunked-prefill \
@@ -141,14 +150,16 @@ cloudmesh:
               --port {remote_port}
 
         gemma:
+          max_model_len: 131072
           name: "vllm_gemma_{remote_port}"
-          launch_mode: sbatch
+          launch_mode: "sbatch"
           account: "bii_dsc_community"
           partition: "bii-gpu"
           reservation: "bi_fox_dgx"
-          gres: "gpu:a100:4"
           cpus: 4
           gpus: 4
+          gres: "gpu:a100:{gpus}"
+          tensor_parallel_size: "{gpus}"
           mem: "64G"
           image: "/scratch/thf2bn/vllm_gemma4.sif"
           model: "google/gemma-4-31B-it"
@@ -170,26 +181,27 @@ cloudmesh:
               --env VLLM_API_KEY="${VLLM_API_KEY}" \
               {image} \
               --model {model} \
-              --tensor-parallel-size {gpus} \
+              --tensor-parallel-size {tensor_parallel_size} \
               --gpu-memory-utilization 0.85 \
-              --max-model-len 131072 \
-              --enable-prefix-caching \
+               --max-model-len {max_model_len} \
+               --enable-prefix-caching \
               --load-format safetensors \
               --tool-call-parser gemma4 \
               --host 0.0.0.0 \
               --port {remote_port}
         qwen:
           name: "vllm_qwen_{remote_port}"
-          launch_mode: sbatch
+          launch_mode: "sbatch"
           account: "bii_dsc_community"
           partition: "bii-gpu"
           reservation: "bi_fox_dgx"
-          gres: "gpu:a100:4"
           cpus: 4
+          gpus: 4
+          gres: "gpu:a100:{gpus}"
+          tensor_parallel_size: "{gpus}"
           mem: "64G"
           image: "/scratch/thf2bn/vllm_qwen_coder.sif"
           model: "Qwen/Qwen2.5-Coder-70B-Instruct"
-          tensor_parallel_size: 4
           gpu_memory_utilization: 0.90
           max_model_len: 32768
           cache_dir: "/scratch/$USER/hf_cache"
@@ -200,21 +212,24 @@ cloudmesh:
           user: '{~/.ssh/config:uva.user}'
 
         deepseek:
+          max_model_len: 32768
           name: "vllm_deepseek_{remote_port}"
-          launch_mode: sbatch
+          launch_mode: "sbatch"
           account: "bii_dsc_community"
           partition: "bii-gpu"
           reservation: "bi_fox_dgx"
-          gres: "gpu:a100:4"
           cpus: 4
+          gpus: 4
+          gres: "gpu:a100:{gpus}"
+          tensor_parallel_size: "{gpus}"
           mem: "64G"
           image: "/scratch/thf2bn/vllm_deepseek_r1.sif"
           model: "deepseek-ai/DeepSeek-R1-Distill-Llama-70B"
           extra_args: |
-            --tensor-parallel-size 4
+            --tensor-parallel-size {tensor_parallel_size}
             --gpu-memory-utilization 0.90
             --max-model-len 32768
-            --max-num-batched-tokens 32768
+            --max-num-batched-tokens {max_model_len}
             --enforce-eager
             --trust-remote-code
             --enable-chunked-prefill
@@ -228,7 +243,8 @@ cloudmesh:
 
       dgx:
         local-gemma-2:
-          launch_mode: local
+          gpus: 2
+          launch_mode: "local"
           image: "vllm/vllm-openai:gemma4-cu130"
           model: "google/gemma-4-31B-it"
           tensor_parallel_size: 2
@@ -250,14 +266,15 @@ cloudmesh:
               -e VLLM_API_KEY="${VLLM_API_KEY}" \
               vllm/vllm-openai:gemma4-cu130 \
               --model google/gemma-4-31B-it \
-              --tensor-parallel-size 2 \
+              --tensor-parallel-size {tensor_parallel_size} \
               --gpu-memory-utilization 0.90 \
               --max-model-len 65536 \
               --enable-prefix-caching \
               --load-format safetensors
 
         local-gemma-4:
-          launch_mode: local
+          gpus: 4
+          launch_mode: "local"
           image: "vllm/vllm-openai:gemma4-cu130"
           model: "google/gemma-4-31B-it"
           tensor_parallel_size: 4
@@ -279,14 +296,15 @@ cloudmesh:
               -e VLLM_API_KEY="${VLLM_API_KEY}" \
               vllm/vllm-openai:gemma4-cu130 \
               --model google/gemma-4-31B-it \
-              --tensor-parallel-size 2 \
+              --tensor-parallel-size {tensor_parallel_size} \
               --gpu-memory-utilization 0.90 \
               --max-model-len 65536 \
               --enable-prefix-caching \
               --load-format safetensors
 
         local-gemma:
-          launch_mode: local
+          gpus: 4
+          launch_mode: "local"
           image: "vllm/vllm-openai:gemma4-cu130"
           model: "google/gemma-4-31B-it"
           tensor_parallel_size: 4

@@ -125,7 +125,33 @@ def chat_completions():
             timeout=300,
         )
         
-        # 5. Stream or return full response
+        # 5. Log 400 errors with request details for debugging
+        if resp.status_code == 400:
+            # Read response content (for non-streaming or if available)
+            try:
+                error_content = resp.text[:2000] if resp.text else "No response body"
+            except Exception:
+                error_content = "Unable to read response body"
+            
+            logger.error("=" * 80)
+            logger.error("400 BAD REQUEST ERROR")
+            logger.error("-" * 80)
+            logger.error(f"Target URL: {TARGET_URL}/api/chat/completions")
+            logger.error(f"Request Headers: {json.dumps(headers, indent=2)}")
+            logger.error(f"Request Payload: {json.dumps(clean_data, indent=2)}")
+            logger.error(f"Response Status: {resp.status_code}")
+            logger.error(f"Response Body: {error_content}")
+            logger.error("=" * 80)
+        
+        # Also log other error status codes
+        elif resp.status_code >= 400:
+            try:
+                error_content = resp.text[:500] if resp.text else "No response body"
+            except Exception:
+                error_content = "Unable to read response body"
+            logger.warning(f"HTTP {resp.status_code} from upstream: {error_content}")
+        
+        # 6. Stream or return full response
         if clean_data.get("stream", True):
             return Response(
                 resp.iter_content(chunk_size=1024),
