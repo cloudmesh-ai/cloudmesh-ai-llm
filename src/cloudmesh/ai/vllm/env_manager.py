@@ -68,6 +68,77 @@ class EnvManager:
         
         self.remote_path = remote_path or self.DEFAULT_REMOTE_PATH
     
+    def create_template(self, path: Optional[str] = None) -> bool:
+        """
+        Create a default .env template file.
+        
+        Args:
+            path: Path to create the template (default: self.DEFAULT_LOCAL_PATH)
+            
+        Returns:
+            True if successful
+        """
+        target_path = path or self.DEFAULT_LOCAL_PATH
+        
+        template_content = (
+            "# cloudmesh-ai-llm Environment Configuration\n"
+            "# Edit this file with your actual values\n"
+            "\n"
+            "# =============================================================================\n"
+            "# VLLM / API Configuration\n"
+            "# =============================================================================\n"
+            "VLLM_API_KEY=your_api_key_here\n"
+            "VLLM_MODEL=gemma\n"
+            "VLLM_GPU_MEMORY_UTILIZATION=0.9\n"
+            "VLLM_MAX_MODEL_LEN=4096\n"
+            "VLLM_TENSOR_PARALLEL_SIZE=1\n"
+            "VLLM_DTYPE=auto\n"
+            "\n"
+            "# =============================================================================\n"
+            "# Cloudmesh Configuration\n"
+            "# =============================================================================\n"
+            "CLOUDMESH_AI_USER=your_username\n"
+            "CLOUDMESH_AI_HOST=localhost\n"
+            "CLOUDMESH_AI_PORT=8000\n"
+            "CLOUDMESH_AI_API_KEY=your_api_key_here\n"
+            "\n"
+            "# =============================================================================\n"
+            "# SSH Configuration (for remote deployments)\n"
+            "# =============================================================================\n"
+            "SSH_HOST=your_remote_host\n"
+            "SSH_USER=your_username\n"
+            "SSH_KEY_PATH=~/.ssh/id_rsa\n"
+            "\n"
+            "# =============================================================================\n"
+            "# Docker Configuration (for containerized deployments)\n"
+            "# =============================================================================\n"
+            "DOCKER_IMAGE=vllm/vllm-openai:latest\n"
+            "DOCKER_CONTAINER_NAME=vllm-server\n"
+            "DOCKER_NETWORK=host\n"
+            "\n"
+            "# =============================================================================\n"
+            "# Development/Testing Configuration\n"
+            "# =============================================================================\n"
+            "DEBUG=false\n"
+            "LOG_LEVEL=INFO\n"
+        )
+        
+        try:
+            if os.path.exists(target_path):
+                if not console.ynchoice(f"File {target_path} already exists. Overwrite?", default=False):
+                    console.print("Init cancelled")
+                    return False
+            
+            with open(target_path, 'w') as f:
+                f.write(template_content)
+            
+            os.chmod(target_path, 0o600)
+            console.ok(f"Created template env file at {target_path}")
+            return True
+        except Exception as e:
+            console.error(f"Failed to create template: {e}")
+            return False
+
     def _resolve_local_env_path(self) -> str:
         """
         Resolve the local env file path by searching multiple locations.

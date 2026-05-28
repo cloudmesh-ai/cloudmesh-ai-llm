@@ -11,9 +11,9 @@ This manual provides a comprehensive guide to managing environment variables usi
 To get started with environment variables, follow these three simple steps:
 
 #### 1. Setup your `.env` file
-Create a local `.env` file from the provided template:
+Initialize a local `.env` file with default values:
 ```bash
-cp .env.template .env
+cmc env init
 # Edit .env with your actual API keys and settings
 ```
 
@@ -70,6 +70,7 @@ The `cmc env` suite manages `.env` files across local and remote environments.
 
 | Command | Description | Common Flags | Status |
 | :--- | :--- | :--- | :---: |
+| `init` | Initialize default `.env` file | `--path [PATH]` | ✅ |
 | `probe [HOST]` | Compare local `.env` with remote | `--format table\|json\|yaml` | ✅ |
 | `sync HOST` | Intelligent merge of local into remote | `--strategy local_wins\|remote_wins\|ask` `--dry-run` | ✅ |
 | `cp HOST` | Destructive copy local $\rightarrow$ remote | `--force` `--backup` `--no-backup` | ✅ |

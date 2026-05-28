@@ -31,6 +31,25 @@ def env_group():
     pass
 
 
+@env_group.command(name="init")
+@click.option('--path', '-p', default=None, help='Path to create the .env file (default: .env)')
+def init_cmd(path: Optional[str]):
+    """
+    Initialize a default .env file with a template.
+    
+    Creates a local .env file containing all available configuration options
+    with default values. Use this to quickly start configuring your environment.
+    
+    Example:
+        cmc env init                    # Create default .env
+        cmc env init -p .env.local      # Create specific local env
+    """
+    manager = EnvManager()
+    if manager.create_template(path=path):
+        console.ok(f"Environment initialized successfully")
+    else:
+        console.error("Failed to initialize environment")
+
 @env_group.command(name="probe")
 @click.argument('host', required=False, default=None)
 @click.option('--local', '-l', default=None, help='Local env file path (default: searches .env, then ~/.config/cloudmesh/.env)')
