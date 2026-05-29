@@ -1,4 +1,7 @@
-# Model Resource Allocation
+# Model Resource Allocation Needs
+
+!!! warning "Disclaimer"
+    This page is currently under review and some information may not be correct. We are working on corrections soon. For example, the Kimi model allocations are not yet accurate.
 
 ## A100 (80GB) GPUs
 ### Local vLLM Models (Google Gemma)

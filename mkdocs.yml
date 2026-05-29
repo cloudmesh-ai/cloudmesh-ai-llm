@@ -4,7 +4,7 @@ extra_css:
 nav:
 - Home: index.md
 - Documents:
-  - README: readme.md
+  - README: index.md
   - UVA: uva.md
   - Environment: ENVIRONMENT.md
   - Cline: cline.md
@@ -38,3 +38,6 @@ site_name: Cloudmesh AI Llm
 theme:
   name: material
 use_directory_urls: false
+
+markdown_extensions:
+  - admonition
