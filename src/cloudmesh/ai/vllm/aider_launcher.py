@@ -12,12 +12,8 @@ class AiderLauncher:
 
     def __init__(self):
         self.docker = DockerManager()
-        config_path = VLLMConfig.DEFAULT_USER_CONFIG_PATH
-        if os.path.exists(config_path):
-            with open(config_path, 'r') as f:
-                self.db = DotDict(yaml.safe_load(f) or {})
-        else:
-            self.db = DotDict()
+        # Use VLLMConfig to get the merged configuration (internal defaults + user config)
+        self.db = VLLMConfig()
 
     def launch(self, client_config=None):
         """Launch the aider CLI with required environment variables."""

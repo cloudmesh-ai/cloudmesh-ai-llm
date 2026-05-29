@@ -9,8 +9,8 @@ class ClaudeLauncher:
     """Handles the launch of Claude Code with vLLM backend."""
 
     def __init__(self):
-        # Use YamlDB to load the resolved configuration in memory
-        self.db = YamlDB(filename=VLLMConfig.DEFAULT_USER_CONFIG_PATH, backend=":memory:")
+        # Use VLLMConfig to get the merged configuration (internal defaults + user config)
+        self.db = VLLMConfig()
 
     def _get_claude_model(self, model):
         """Return the model name as is for vLLM backends."""

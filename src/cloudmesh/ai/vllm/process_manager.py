@@ -15,7 +15,7 @@ class ProcessRegistry:
     def register(self, name: str, process: subprocess.Popen):
         """Register a process for tracking."""
         self._processes[name] = process
-        console.debug(f"Registered process {name} (PID: {process.pid})")
+        console.print(f"[dim]Registered process {name} (PID: {process.pid})[/dim]")
 
     def unregister(self, name: str):
         """Unregister a process."""
@@ -32,7 +32,7 @@ class ProcessRegistry:
         for name, process in list(self._processes.items()):
             try:
                 if process.poll() is None:
-                    console.debug(f"Terminating process {name} (PID: {process.pid})")
+                    console.print(f"[dim]Terminating process {name} (PID: {process.pid})[/dim]")
                     process.terminate()
                     try:
                         process.wait(timeout=2)

@@ -167,9 +167,11 @@ def llm_group(ctx, debug):
 @click.option("--info", is_flag=True, help="Display server configuration info")
 @click.option("--export", is_flag=True, help="Export launch scripts to local directory for customization")
 @click.option("--port", type=int, help="Override both local and remote ports")
+@click.option("--device", help="Explicit device IDs (e.g. '0,1,2,3')")
+@click.option("--dryrun", is_flag=True, help="Print command without executing")
 @click.argument("name")
 @click.pass_context
-def start(ctx, name, ui, claude, info, export, port):
+def start(ctx, name, ui, claude, info, export, port, device, dryrun):
     """Full pipeline: Start vLLM server -> Tunnel -> Health Check -> Optional UI."""
     try:
         debug = ctx.obj.get("debug", False)

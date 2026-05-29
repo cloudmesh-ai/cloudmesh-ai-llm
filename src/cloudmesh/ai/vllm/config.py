@@ -59,7 +59,7 @@ class VLLMConfig(DotDict):
             db (DotDict, optional): An optional pre-loaded configuration database. 
                 Defaults to None, in which case it loads from YAML files.
             user_config_path (str, optional): Path to the user configuration YAML file.
-                Defaults to DEFAULT_USER_CONFIG_PATH.
+                Defaults to ~/.config/cloudmesh/llm.yaml.
         """
         self.user_config_path = user_config_path or os.path.expanduser("~/.config/cloudmesh/llm.yaml")
         self._config = self._get_global_config(db)
@@ -87,9 +87,21 @@ class VLLMConfig(DotDict):
             
         return merged_data
 
+    def load_user_config(self):
+        """Loads only the user-defined configuration from the filesystem.
+        
+        Returns:
+            dict: The user configuration, or an empty dict if no file exists.
+        """
+        user_path = self.user_config_path
+        if os.path.exists(user_path):
+            with open(user_path, "r") as f:
+                return yaml.safe_load(f) or {}
+        return {}
+
     def _load_merged_config(self):
         """Loads internal and user configurations and merges them.
-
+        
         Returns:
             dict: The merged global configuration.
         """
@@ -99,11 +111,9 @@ class VLLMConfig(DotDict):
             global_config = yaml.safe_load(f) or {}
 
         # 2. Load the local config file from the filesystem
-        user_path = self.user_config_path
-        if os.path.exists(user_path):
-            with open(user_path, "r") as f:
-                user_data = yaml.safe_load(f) or {}
-            
+        user_data = self.load_user_config()
+        
+        if user_data:
             # 3. Deep merge user data into the global config
             global_config = DotDict(global_config)
             global_config.merge(user_data)
@@ -595,8 +605,13 @@ class VLLMConfig(DotDict):
             base = env_var
         
         # Replace double underscores with dots (for nesting)
-        # Replace single underscores with dots
-        path = base.lower().replace('__', '.').replace('_', '.')
+        path = base.lower().replace('__', '.')
+        
+        # Special case: if it starts with ai_, replace that first underscore with a dot
+        if path.startswith('ai.'):
+            pass # already handled if it was AI__
+        elif path.startswith('ai_'):
+            path = 'ai.' + path[3:]
         
         # Ensure it starts with cloudmesh
         if not path.startswith('cloudmesh'):
@@ -612,11 +627,11 @@ class VLLMConfig(DotDict):
             value: The value to set
         """
         keys = path.split('.')
-        current = self._config
+        current = self
         
         for key in keys[:-1]:
             if key not in current:
-                current[key] = {}
+                current[key] = DotDict()
             current = current[key]
         
         # Try to convert value to appropriate type

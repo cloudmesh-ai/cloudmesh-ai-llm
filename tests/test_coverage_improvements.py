@@ -1,5 +1,7 @@
 import pytest
 import requests
+import subprocess
+import json
 from unittest.mock import MagicMock, patch, mock_open
 from cloudmesh.ai.vllm.config import VLLMConfig
 from cloudmesh.ai.vllm.client import VLLMClient
@@ -13,9 +15,10 @@ def test_expand_external_references_ssh_config():
     ssh_content = "Host uva\n  User uva_user\n  Hostname uva.example.com\n"
     
     with patch("os.path.exists", return_value=True), \
-         patch("builtins.open", mock_open(read_data=ssh_content)):
+         patch("builtins.open", mock_open(read_data=ssh_content)), \
+         patch.object(VLLMConfig, "_load_merged_config", return_value={}):
         
-        config_data = DotDict({"cloudmesh": {"ai": {"server": {"uva": {"user": "~/.ssh/config:uva.User"}}}}})
+        config_data = DotDict({"cloudmesh": {"ai": {"server": {"uva": {"user": "{~/.ssh/config:uva.User}"}}}}})
         config = VLLMConfig(db=config_data)
         
         expanded = config.expand_external_references()
@@ -26,9 +29,10 @@ def test_expand_external_references_simple_file():
     file_content = "API_KEY=secret_value_123\n"
     
     with patch("os.path.exists", return_value=True), \
-         patch("builtins.open", mock_open(read_data=file_content)):
+         patch("builtins.open", mock_open(read_data=file_content)), \
+         patch.object(VLLMConfig, "_load_merged_config", return_value={}):
         
-        config_data = DotDict({"cloudmesh": {"ai": {"api_key": "~/.env:API_KEY"}}})
+        config_data = DotDict({"cloudmesh": {"ai": {"api_key": "{~/.env:API_KEY}"}}})
         config = VLLMConfig(db=config_data)
         
         expanded = config.expand_external_references()
@@ -37,7 +41,7 @@ def test_expand_external_references_simple_file():
 def test_expand_external_references_fail():
     """Test that failed resolutions return the original reference."""
     with patch("os.path.exists", return_value=False):
-        config_data = DotDict({"cloudmesh": {"ai": {"key": "~/nonexistent:value"}}})
+        config_data = DotDict({"cloudmesh": {"ai": {"key": "{~/nonexistent:value}"}}})
         config = VLLMConfig(db=config_data)
         
         expanded = config.expand_external_references()
@@ -48,13 +52,14 @@ def test_expand_external_references_nested():
     ssh_content = "Host uva\n  User uva_user\n"
     
     with patch("os.path.exists", return_value=True), \
-         patch("builtins.open", mock_open(read_data=ssh_content)):
+         patch("builtins.open", mock_open(read_data=ssh_content)), \
+         patch.object(VLLMConfig, "_load_merged_config", return_value={}):
         
         config_data = DotDict({
             "cloudmesh": {
                 "ai": {
                     "server": {
-                        "uva": {"user": "~/.ssh/config:uva.User"},
+                            "uva": {"user": "{~/.ssh/config:uva.User}"},
                         "dgx": {"user": "dgx_user"}
                     }
                 }
@@ -71,7 +76,8 @@ def test_expand_external_references_mixed_placeholders():
     ssh_content = "Host uva\n  User uva_user\n"
     
     with patch("os.path.exists", return_value=True), \
-         patch("builtins.open", mock_open(read_data=ssh_content)):
+         patch("builtins.open", mock_open(read_data=ssh_content)), \
+         patch.object(VLLMConfig, "_load_merged_config", return_value={}):
         
         # Note: DotDict.expand handles {user} if it exists in the dict
         config_data = DotDict({
@@ -80,7 +86,7 @@ def test_expand_external_references_mixed_placeholders():
                 "ai": {
                     "server": {
                         "uva": {
-                            "user": "~/.ssh/config:uva.User",
+                            "user": "{~/.ssh/config:uva.User}",
                             "path": "/home/{user}/data"
                         }
                     }
@@ -91,7 +97,7 @@ def test_expand_external_references_mixed_placeholders():
         
         expanded = config.expand_external_references()
         assert expanded.cloudmesh.ai.server.uva.user == "uva_user"
-        assert expanded.cloudmesh.ai.server.uva.path == "/home/local_user/data"
+        assert expanded.cloudmesh.ai.server.uva.path == "/home/uva_user/data"
 
 # --- Tests for VLLMClient.get_status ---
 
@@ -427,9 +433,10 @@ def test_resolve_server_identity_fallback():
             }
         }
     })
-    config = VLLMConfig(db=config_data)
-    identity = config.resolve_server_identity("uva.gemma")
-    assert identity["user"] == "global_user"
+    with patch.object(VLLMConfig, "_load_merged_config", return_value={}):
+        config = VLLMConfig(db=config_data)
+        identity = config.resolve_server_identity("uva.gemma")
+        assert identity["user"] == "global_user"
     assert identity["port"] == 9000
     assert identity["host"] == "uva.example.com"
 
@@ -538,8 +545,10 @@ def test_prepare_backend_launch_success():
          patch("cloudmesh.ai.vllm.orchestrator.get_server") as mock_get_server:
         
         mock_client = mock_client_cls.return_value
-        # First check: not alive. Second check: alive.
-        mock_client.is_alive.side_effect = [False, True]
+        # First check (initial): not alive. 
+        # Second check (after tunnel): not alive (to force server.start).
+        # Third check (final poll): alive.
+        mock_client.is_alive.side_effect = [False, False, True]
         
         mock_server = MagicMock()
         mock_get_server.return_value = mock_server
@@ -555,7 +564,7 @@ def test_prepare_backend_launch_success():
         assert result is True
         mock_server.tunnel.assert_called_once()
         mock_server.start.assert_called_once()
-        assert mock_client.is_alive.call_count == 2
+        assert mock_client.is_alive.call_count == 3
 
 def test_prepare_backend_invalid_server():
     """Test that prepare_backend raises ValueError for unknown servers."""
@@ -650,10 +659,8 @@ def test_webui_launcher_config_resolution():
             launcher.docker.check_docker.return_value = True
             launcher.docker.run_container = MagicMock(return_value=True)
             launcher._wait_for_webui = MagicMock()
-            patcher = patch("os.system")
-            patcher.start()
-            
-            launcher.launch()
+            with patch("os.system"), patch("os.remove"):
+                launcher.launch()
             
             # Verify the env file content written to disk
             # The env file is the best place to verify resolved values
@@ -663,7 +670,6 @@ def test_webui_launcher_config_resolution():
             assert "OPENAI_API_KEY=webui-secret" in written_content
             assert "OPENAI_API_BASE_URL=http://host.docker.internal:8001/v1" in written_content
             assert launcher.webui_port == 3001
-            patcher.stop()
 
 def test_aider_launcher_config_resolution():
     """Test config resolution for AiderLauncher."""
@@ -716,9 +722,9 @@ def test_aider_launcher_client_override():
 
 def test_claude_launcher_config_resolution():
     """Test config resolution for ClaudeLauncher."""
-    # Mock YamlDB
-    with patch("cloudmesh.ai.vllm.claude_launcher.YamlDB") as mock_yamldb:
-        db_instance = mock_yamldb.return_value
+    # Mock VLLMConfig
+    with patch("cloudmesh.ai.vllm.claude_launcher.VLLMConfig") as mock_config_cls:
+        db_instance = mock_config_cls.return_value
         db_instance.get.side_effect = lambda key: {
             "cloudmesh.ai.client.claude": {
                 "openai_api_key": "claude-secret",

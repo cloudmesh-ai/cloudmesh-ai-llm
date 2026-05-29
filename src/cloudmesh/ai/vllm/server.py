@@ -36,9 +36,9 @@ class Server(ABC):
             else:
                 self.db = db
         else:
-            # Initialize db using VLLMConfig to ensure consistent structure and merging
+            # Initialize db with only user config to avoid polluting it with internal examples
             config_manager = VLLMConfig()
-            self.db = config_manager._config
+            self.db = DotDict(config_manager.load_user_config())
 
 
     def _get_config(self, name: str):

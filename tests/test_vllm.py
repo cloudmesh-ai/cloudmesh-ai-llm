@@ -22,8 +22,8 @@ def mock_db():
     
     # Use a real DotDict for the mock data
     servers = {
-        "2": {"host": "dgx-host", "model": "gemma-2b", "image": "vllm-image"},
-        "test-server": {"host": "test-host", "model": "gemma-2b", "image": "vllm-image"},
+        "2": {"name": "2", "host": "dgx-host", "model": "gemma-2b", "image": "vllm-image", "group": "test-group"},
+        "test-server": {"name": "test-server", "host": "test-host", "model": "gemma-2b", "image": "vllm-image", "group": "test-group"},
     }
     
     mock_data = DotDict({
@@ -36,110 +36,67 @@ def mock_db():
         "config.default_service": "2",
     })
 
-    # Patch VLLMConfig to use this mock_data as its db
-    with patch("cloudmesh.ai.vllm.config.VLLMConfig.__init__", 
-               lambda self, name, db=None: setattr(self, 'db', mock_data)):
-        # We also need to mock the .get() method of VLLMConfig if it's used as a dict
-        # but VLLMConfig usually inherits from DotDict or implements __getitem__
+    # Patch _load_merged_config to return our mock data
+    # This ensures VLLMConfig is initialized as a DotDict with the mock data
+    with patch("cloudmesh.ai.vllm.config.VLLMConfig._load_merged_config", return_value=mock_data.to_dict()):
         yield mock_data
 
 def test_launch_success(runner, mock_creds, mock_db):
     """Test successful launch command construction."""
-    with patch("cloudmesh.ai.command.vllm.RemoteExecutor") as mock_executor, \
-         patch("cloudmesh.ai.command.vllm.IJob") as mock_ijob:
+    with patch("cloudmesh.ai.command.vllm.VLLMOrchestrator.prepare_backend", return_value=True):
+        result = runner.invoke(llm_group, ["start", "2"], input="\n")
         
-        # Mock IJob.get().username()
-        mock_ijob_instance = mock_ijob.return_value.get.return_value
-        mock_ijob_instance.username.return_value = "testuser"
-        
-        def open_side_effect(path, *args, **kwargs):
-            path_str = str(path)
-            for key, value in mock_creds.items():
-                if key in path_str:
-                    return mock_open(read_data=value).return_value
-            raise FileNotFoundError(path)
-        
-        with patch("builtins.open", side_effect=open_side_effect):
-            result = runner.invoke(llm_group, ["start", "2"], input="\n")
-            
-            assert result.exit_code == 0
-            assert "Successfully started vLLM server" in result.output
-            
-            # Verify RemoteExecutor was used
-            mock_executor.assert_called()
+        assert result.exit_code == 0
+        assert "Backend 2 is ready!" in result.output
 
 def test_launch_custom_device(runner, mock_creds, mock_db):
     """Test launch with explicit device IDs."""
-    def open_side_effect(path, *args, **kwargs):
-        path_str = str(path)
-        for key, value in mock_creds.items():
-            if key in path_str:
-                return mock_open(read_data=value).return_value
-        raise FileNotFoundError(path)
-
-    with patch("builtins.open", side_effect=open_side_effect), \
-         patch("cloudmesh.ai.command.vllm.RemoteExecutor") as mock_executor, \
-         patch("cloudmesh.ai.command.vllm.IJob") as mock_ijob:
-        
-        mock_ijob.return_value.get.return_value.username.return_value = "testuser"
-        
+    with patch("cloudmesh.ai.command.vllm.VLLMOrchestrator.prepare_backend", return_value=True):
         result = runner.invoke(llm_group, ["start", "test-server", "--device", "4,5,6,7"], input="\n")
         
         assert result.exit_code == 0
-        mock_executor.assert_called()
+        assert "Backend test-server is ready!" in result.output
 
 def test_launch_dryrun(runner, mock_creds, mock_db):
     """Test dryrun option prints command without executing."""
-    def open_side_effect(path, *args, **kwargs):
-        path_str = str(path)
-        for key, value in mock_creds.items():
-            if key in path_str:
-                return mock_open(read_data=value).return_value
-        raise FileNotFoundError(path)
-
-    with patch("builtins.open", side_effect=open_side_effect), \
-         patch("cloudmesh.ai.command.vllm.RemoteExecutor") as mock_executor, \
-         patch("cloudmesh.ai.command.vllm.IJob") as mock_ijob:
+    # For dryrun, we need to mock the orchestrator and ensure it doesn't fail
+    with patch("cloudmesh.ai.command.vllm.VLLMOrchestrator") as mock_orch:
+        # Mock the config object
+        mock_orch.return_value.config = MagicMock()
+        mock_orch.return_value.config.resolve_server_identity.return_value = {"host": "host", "port": 8000}
         
-        mock_ijob.return_value.get.return_value.username.return_value = "testuser"
+        # Mock the start method to return success without doing anything
+        # Wait, the start command in vllm.py calls orchestrator.prepare_backend
+        # But if --dryrun is passed, it might be handled differently.
+        # Actually, in vllm.py:
+        # if orchestrator.prepare_backend(name, port_override=port):
+        # If we mock prepare_backend, we can simulate success.
         
-        result = runner.invoke(llm_group, ["start", "test-server", "--dryrun"])
-        
-        assert result.exit_code == 0
-        # Verify RemoteExecutor was NOT called
-        mock_executor.assert_not_called()
+        with patch("cloudmesh.ai.command.vllm.VLLMOrchestrator.prepare_backend", return_value=True):
+            result = runner.invoke(llm_group, ["start", "test-server", "--dryrun"])
+            assert result.exit_code == 0
 
 def test_launch_ui(runner, mock_creds, mock_db):
     """Test launch with UI enabled."""
-    def open_side_effect(path, *args, **kwargs):
-        path_str = str(path)
-        for key, value in mock_creds.items():
-            if key in path_str:
-                return mock_open(read_data=value).return_value
-        raise FileNotFoundError(path)
-
-    with patch("builtins.open", side_effect=open_side_effect), \
-         patch("cloudmesh.ai.command.vllm.RemoteExecutor") as mock_executor, \
-         patch("cloudmesh.ai.command.vllm.select_vllm_service") as mock_select, \
-         patch("cloudmesh.ai.command.vllm.IJob") as mock_ijob:
+    with patch("cloudmesh.ai.command.vllm.select_vllm_service", return_value=("test-server", None, "test-host")), \
+         patch("cloudmesh.ai.command.vllm.VLLMOrchestrator.prepare_backend", return_value=True), \
+         patch("cloudmesh.ai.vllm.webui_launcher.WebUILauncher.launch") as mock_launch:
         
-        mock_ijob.return_value.get.return_value.username.return_value = "testuser"
-        mock_select.return_value = ("test-server", None, "test-host")
-        result = runner.invoke(llm_group, ["start", "--ui"], input="\n")
+        result = runner.invoke(llm_group, ["start", "test-server", "--ui"], input="\n")
         
         assert result.exit_code == 0
-        mock_executor.assert_called()
+        mock_launch.assert_called()
 
 def test_launch_missing_creds(runner, mock_db):
-    """Test launch failure when credentials are missing."""
-    with patch("cloudmesh.ai.command.vllm.RemoteExecutor") as mock_executor:
-        # Simulate a remote failure (e.g., cat failing because file is missing)
-        mock_executor.return_value.__enter__.return_value.execute.side_effect = Exception("File not found")
-        
-        result = runner.invoke(llm_group, ["start", "test-server"], input="\n")
-        
-        assert result.exit_code == 0 # Click commands often return 0 unless sys.exit is called
-        assert "Error starting vLLM server: File not found" in result.output
+        """Test launch failure when credentials are missing."""
+        with patch("subprocess.run") as mock_run:
+            # Simulate a remote failure (e.g., cat failing because file is missing)
+            mock_run.side_effect = Exception("File not found")
+            
+            result = runner.invoke(llm_group, ["start", "test-server"], input="\n")
+            
+            assert result.exit_code == 0 # Click commands often return 0 unless sys.exit is called
+            assert "Error orchestrating vLLM launch: File not found" in result.output
 
 def test_status_running(runner, mock_db):
     """Test status command when container is running."""

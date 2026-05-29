@@ -13,12 +13,8 @@ class WebUILauncher:
 
     def __init__(self):
         self.docker = DockerManager()
-        config_path = VLLMConfig.DEFAULT_USER_CONFIG_PATH
-        if os.path.exists(config_path):
-            with open(config_path, 'r') as f:
-                self.db = DotDict(yaml.safe_load(f) or {})
-        else:
-            self.db = DotDict()
+        # Use VLLMConfig to get the merged configuration (internal defaults + user config)
+        self.db = VLLMConfig()
         self.container_name = "open-webui"
         self.local_tunnel_port = 8001
         self.image = "ghcr.io/open-webui/open-webui:main"
