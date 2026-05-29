@@ -38,6 +38,7 @@ Usage:
     llm kill [NAME] [--tunnel]
     llm status [NAME]
     llm logs [NAME]
+    llm processes
     llm default server [NAME]
     llm default client [NAME]
     llm tunnel stop [NAME]
@@ -71,7 +72,9 @@ from cloudmesh.ai.vllm.exceptions import VLLMError, VLLMConnectionError, VLLMCon
 from cloudmesh.ai.vllm.config import VLLMConfig
 from cloudmesh.ai.vllm.client import VLLMClient
 from cloudmesh.ai.vllm.ijob import IJob
+from cloudmesh.ai.vllm.process_manager import process_registry
 from cloudmesh.ai.vllm.orchestrator import VLLMOrchestrator, get_default_host, get_server, get_vllm_api_key
+from cloudmesh.ai.vllm.templates_manager import get_templates_manager
 from cloudmesh.ai.command.env import env_group
 from cloudmesh.ai.command.cline import cline_group
 from cloudmesh.ai.command.continue_cmd import continue_group
@@ -151,9 +154,12 @@ def select_vllm_service(db, group_filter=None):
 
 
 @click.group()
-def llm_group():
+@click.option("--debug", is_flag=True, help="Enable debug logging to expose raw commands")
+@click.pass_context
+def llm_group(ctx, debug):
     """LLM management extension."""
-    pass
+    ctx.ensure_object(dict)
+    ctx.obj["debug"] = debug
 
 @llm_group.command(name="start")
 @click.option("--ui", is_flag=True, help="Launch WebUI after backend is ready")
@@ -162,11 +168,13 @@ def llm_group():
 @click.option("--export", is_flag=True, help="Export launch scripts to local directory for customization")
 @click.option("--port", type=int, help="Override both local and remote ports")
 @click.argument("name")
-def start(name, ui, claude, info, export, port):
+@click.pass_context
+def start(ctx, name, ui, claude, info, export, port):
     """Full pipeline: Start vLLM server -> Tunnel -> Health Check -> Optional UI."""
     try:
+        debug = ctx.obj.get("debug", False)
         if info:
-            orchestrator = VLLMOrchestrator()
+            orchestrator = VLLMOrchestrator(debug=debug)
             servers = orchestrator.config.get("cloudmesh.ai.server", {})
             config_path = orchestrator.config_path
             if isinstance(servers, dict) and name in servers:
@@ -191,7 +199,7 @@ def start(name, ui, claude, info, export, port):
                     console.error(f"Could not read configuration file: {e}")
             return
 
-        orchestrator = VLLMOrchestrator()
+        orchestrator = VLLMOrchestrator(debug=debug)
 
         if export:
             console.print(f"[blue]Exporting scripts for {name}...[/blue]")
@@ -204,27 +212,64 @@ def start(name, ui, claude, info, export, port):
         # Check if the name refers to a client instead of a server
         clients = orchestrator.config.get("cloudmesh.ai.client", {})
         # Recognize common clients even if not explicitly in config
-        if (isinstance(clients, dict) and name in clients) or name in ["aider", "webui", "claude"]:
+        if (isinstance(clients, dict) and name in clients) or name in ["aider", "webui", "claude", "openwebui"]:
+            # Normalize name for launcher lookup
+            norm_name = "webui" if name == "openwebui" else name
             client_config = clients.get(name, {}) if isinstance(clients, dict) else {}
             
-            # Resolve API key if missing from config
+            # 1. Resolve Port (incorporating logic from 'launch' command)
+            if port:
+                client_config["port"] = port
+            elif not client_config.get("port"):
+                # Fallback: find a running server port
+                default_server = orchestrator.config.get("cloudmesh.ai.default.server")
+                servers = orchestrator.config.get("cloudmesh.ai.server", {})
+                local_port = 8000
+                if default_server and isinstance(servers, dict):
+                    local_port = servers.get(default_server, {}).get("local_port", 8000)
+                elif isinstance(servers, dict):
+                    for s_name, s_cfg in servers.items():
+                        if isinstance(s_cfg, dict) and s_cfg.get("job_id"):
+                            local_port = s_cfg.get("local_port", 8000)
+                            break
+                client_config["port"] = local_port
+
+            # 2. Resolve API Key
             raw_key = client_config.get("OPENAI_API_KEY") or client_config.get("openai_api_key")
             if not raw_key:
                 api_key = get_vllm_api_key(orchestrator.config)
                 if api_key:
                     client_config["OPENAI_API_KEY"] = api_key
+            elif raw_key.startswith("{") and raw_key.endswith("}"):
+                lookup_key = raw_key[1:-1]
+                api_key = get_vllm_api_key(orchestrator.config, lookup_key=lookup_key)
+                if api_key:
+                    client_config["OPENAI_API_KEY"] = api_key
             
-            # Determine launcher based on name if not specified in config
-            launcher_name = client_config.get("launcher") or name
+            # 3. Resolve Launcher and Config
+            launcher_name = client_config.get("launcher") or norm_name
             
-            # Apply port override if provided
-            if port:
-                client_config["port"] = port
-            
-            console.print(banner(f"Launching Client: {name}", f"Host: {client_config.get('host', 'localhost')}\nPort: {client_config.get('port', 'default')}\nLauncher: {launcher_name}"))
+            # Special handling for Aider template if not fully configured
+            if norm_name == "aider" and not client_config.get("model"):
+                try:
+                    config_path = Path(__file__).parent / ".." / "vllm" / "config" / "templates" / "aider.yaml"
+                    if config_path.exists():
+                        with open(config_path, 'r') as f:
+                            tpl = yaml.safe_load(f)
+                        aider_tpl = tpl.get("cloudmesh", {}).get("ai", {}).get("aider", {})
+                        for k, v in aider_tpl.items():
+                            client_config.setdefault(k, v)
+                except (yaml.YAMLError, OSError) as e:
+                    console.debug(f"Could not load Aider template from {config_path}: {e}")
+
+            console.print(banner(f"Launching Client: {name}", 
+                                 f"Host: {client_config.get('host', 'localhost')}\n"
+                                 f"Port: {client_config.get('port', '8000')}\n"
+                                 f"Launcher: {launcher_name}"))
             
             launchers = {
                 "webui": WebUILauncher,
+                "openwebui": WebUILauncher,
                 "claude": ClaudeLauncher,
                 "aider": AiderLauncher,
             }
@@ -270,10 +315,12 @@ def start(name, ui, claude, info, export, port):
 @llm_group.command(name="stop")
 @click.argument("identifier", required=False)
 @click.option("--port", type=str, help="Port or partial port (e.g. '123') to identify the job")
-def stop(identifier, port):
+@click.pass_context
+def stop(ctx, identifier, port):
     """Stop a vLLM server (UVA HPC specific). Supports JobID, fuzzy port, or config port."""
     try:
-        orchestrator = VLLMOrchestrator()
+        debug = ctx.obj.get("debug", False)
+        orchestrator = VLLMOrchestrator(debug=debug)
         
         if identifier:
             if identifier.isdigit():
@@ -316,46 +363,20 @@ def stop(identifier, port):
 @llm_group.command(name="kill")
 @click.argument("name")
 @click.option("--tunnel", is_flag=True, help="Close the SSH tunnel after killing")
-def kill(name, tunnel):
+@click.pass_context
+def kill(ctx, name, tunnel):
     """Forcefully kill vLLM server."""
     try:
-        config_path = os.path.expanduser("~/.config/cloudmesh/llm.yaml")
-        if os.path.exists(config_path):
-            with open(config_path, 'r') as f:
-                db = DotDict(yaml.safe_load(f) or {})
-        else:
-            db = DotDict()
-        servers = db.get("cloudmesh.ai.server", {})
-        target_host = None
-        if isinstance(servers, dict):
-            target_host = servers.get(name, {}).get("host")
-        
-        if not target_host:
-            target_host = get_default_host()
-            if not target_host:
-                raise ValueError(f"Could not resolve host for service '{name}' and no default host configured.")
+        debug = ctx.obj.get("debug", False)
+        orchestrator = VLLMOrchestrator(debug=debug)
+        identity = orchestrator.config.resolve_server_identity(name)
+        target_host = identity["host"]
         
         server = get_server(target_host)
         server.kill(name)
         
         if tunnel:
-            # Use TunnelManager to stop the tunnel
-            config_path = os.path.expanduser("~/.config/cloudmesh/llm.yaml")
-            if os.path.exists(config_path):
-                with open(config_path, 'r') as f:
-                    db = DotDict(yaml.safe_load(f) or {})
-            else:
-                db = DotDict()
-            
-            # Handle dot-notation lookup for the server config
-            server_config = None
-            if "cloudmesh" in db:
-                server_config = db.get("cloudmesh", {}).get("ai", {}).get("server", {}).get(name, {})
-            
-            if not server_config:
-                server_config = {}
-            port = server_config.get('port', '8000')
-            
+            port = identity["port"]
             success, result = tunnel_manager.stop_tunnel(target_host, port)
             if success:
                 console.ok(f"Tunnel closed (PID: {result})")
@@ -366,111 +387,157 @@ def kill(name, tunnel):
     except Exception as e:
         console.error(f"Error killing vLLM server: {e}")
 
-@llm_group.command(name="status")
-@click.argument("name")
-def status(name):
-    """Check vLLM server status."""
+@llm_group.command(name="processes")
+def processes():
+    """List all background processes managed by the orchestrator (tunnels, logs)."""
     try:
-        config_path = os.path.expanduser("~/.config/cloudmesh/llm.yaml")
-        if os.path.exists(config_path):
-            with open(config_path, 'r') as f:
-                db = DotDict(yaml.safe_load(f) or {})
-        else:
-            db = DotDict()
-        servers = db.get("cloudmesh.ai.server", {})
-        target_host = None
-        group = None
-        if isinstance(servers, dict):
-            target_host = servers.get(name, {}).get("host")
+        # 1. Get transient processes from registry
+        tracked = process_registry.list_processes()
         
-        if not target_host:
-            target_host = get_default_host()
-            if not target_host:
-                raise ValueError(f"Could not resolve host for service '{name}' and no default host configured.")
-            group = "uva" if ("uva" in target_host.lower() or "rivanna" in target_host.lower()) else "dgx"
+        # 2. Get persistent tunnels from manager
+        tunnels = tunnel_manager._load_state()
         
-        config = VLLMConfig()
-        client = VLLMClient(config)
+        console.print("\n[bold blue]Managed Background Processes[/bold blue]\n")
+        
+        if not tracked and not tunnels:
+            console.msg("No background processes are currently running.")
+            return
+
+        if tunnels:
+            console.print("[bold]Active Tunnels:[/bold]")
+            for key, pid in tunnels.items():
+                console.print(f" - {key:<20} PID: {pid}")
+            console.print("")
+
+        if tracked:
+            console.print("[bold]Active Registry Processes (Transient):[/bold]")
+            for proc in tracked:
+                status_color = "green" if proc["status"] == "Running" else "dim"
+                console.print(f" - {proc['name']:<20} PID: {proc['pid']:<10} Status: [{status_color}]{proc['status']}[/{status_color}]")
+        
+        console.print("")
+
+    except Exception as e:
+        console.error(f"Error listing processes: {e}")
+
+@llm_group.command(name="status")
+@click.argument("name", required=False)
+@click.pass_context
+def status(ctx, name):
+    """Check vLLM server status. If NAME is omitted, lists all running servers."""
+    try:
+        debug = ctx.obj.get("debug", False)
+        orchestrator = VLLMOrchestrator(debug=debug)
+        
+        if not name:
+            # List all running servers (Unified with 'info')
+            running = orchestrator.list_running_servers()
+            if not running:
+                console.msg("No vLLM servers are currently running.")
+            return
+
+        # Detailed status for a specific server
+        server_config = orchestrator.config.get_server(name)
+        if not server_config:
+            console.error(f"Server '{name}' not found in configuration.")
+            return
+
+        # Resolve identity for the client
+        client = VLLMClient(orchestrator.config, server_name=name, debug=debug)
         
         status_text = client.get_status()
         
-        # Check for tunnel (simplified check: is localhost:port reachable?)
-        tunnel_status = "Unknown"
+        # Check for tunnel status
+        tunnel_status = "Inactive"
         try:
             import socket
-            with socket.create_connection(("127.0.0.1", config.get('port', 8000)), timeout=1):
+            # Use the local port from resolved config
+            local_port = server_config.get("local_port") or orchestrator.config.get("port", 8000)
+            with socket.create_connection(("127.0.0.1", int(local_port)), timeout=1):
                 tunnel_status = "Active"
-        except:
-            tunnel_status = "Inactive"
+        except (socket.error, OSError):
+            # Connection failure means tunnel is inactive
+            pass
 
-        console.print(f"Server '{name}' on {target_host} status: [bold]{status_text}[/bold]")
-        console.print(f"Tunnel status: {tunnel_status}")
+        console.banner(f"Status: {name}")
+        console.print(f"Host:    {client.host}")
+        console.print(f"Port:    {client.port}")
+        console.print(f"Status:  [bold]{status_text}[/bold]")
+        console.print(f"Tunnel:  {tunnel_status}")
+
     except Exception as e:
         console.error(f"Error checking status: {e}")
 
 @llm_group.command(name="logs")
 @click.argument("name")
-def logs(name):
+@click.option("--follow", "-f", is_flag=True, help="Stream logs in real-time")
+@click.option("--grep", help="Filter logs by keyword (case-insensitive)")
+@click.pass_context
+def logs(ctx, name, follow, grep):
     """Retrieve logs for the vLLM server."""
     try:
-        config_path = os.path.expanduser("~/.config/cloudmesh/llm.yaml")
-        if os.path.exists(config_path):
-            with open(config_path, 'r') as f:
-                db = DotDict(yaml.safe_load(f) or {})
+        debug = ctx.obj.get("debug", False)
+        orchestrator = VLLMOrchestrator(debug=debug)
+        identity = orchestrator.config.resolve_server_identity(name)
+        target_host = identity["host"]
+        
+        client = VLLMClient(orchestrator.config, server_name=name, debug=debug)
+        
+        if follow:
+            process = None
+            try:
+                process = client.stream_logs(grep=grep)
+                process_name = f"logs_{name}"
+                process_registry.register(process_name, process)
+                
+                console.print(f"\n[bold blue]Streaming logs for {name} on {target_host} (Ctrl+C to stop)...[/bold blue]\n")
+                if grep:
+                    console.print(f"[dim]Filtering by keyword: {grep}[/dim]")
+                
+                # Read output line by line
+                for line in process.stdout:
+                    console.print(line, end="")
+                    
+            except ValueError as e:
+                console.error(str(e))
+            except KeyboardInterrupt:
+                console.print("\n[dim]Stopped streaming logs.[/dim]")
+            finally:
+                if process:
+                    process.stdout.close()
+                    process.terminate()
+                    process_registry.unregister(f"logs_{name}")
         else:
-            db = DotDict()
-        servers = db.get("cloudmesh.ai.server", {})
-        target_host = None
-        group = None
-        if isinstance(servers, dict):
-            target_host = servers.get(name, {}).get("host")
-        
-        if not target_host:
-            target_host = get_default_host()
-            if not target_host:
-                raise ValueError(f"Could not resolve host for service '{name}' and no default host configured.")
-            group = "uva" if ("uva" in target_host.lower() or "rivanna" in target_host.lower()) else "dgx"
-        
-        config = VLLMConfig()
-        client = VLLMClient(config)
-        
-        log_content = client.get_logs()
-        console.print(f"\n[bold blue]Logs for {name} on {target_host}:[/bold blue]\n{log_content}")
+            log_content = client.get_logs(grep=grep)
+            if not log_content:
+                console.msg(f"No log entries found matching '{grep}'" if grep else "No logs found.")
+            else:
+                console.print(f"\n[bold blue]Logs for {name} on {target_host}:[/bold blue]\n{log_content}")
     except Exception as e:
         console.error(f"Error retrieving logs: {e}")
 
 @llm_group.command(name="get")
 @click.argument("name")
-def get_config(name):
+@click.pass_context
+def get_config(ctx, name):
     """Get configuration for a specific LLM profile (server or client)."""
     try:
-        config_path = os.path.expanduser("~/.config/cloudmesh/llm.yaml")
-        if os.path.exists(config_path):
-            with open(config_path, 'r') as f:
-                db = DotDict(yaml.safe_load(f) or {})
-        else:
-            db = DotDict()
-
-        # Search in servers and clients
-        servers = db.get("cloudmesh.ai.server", {})
-        clients = db.get("cloudmesh.ai.client", {})
+        debug = ctx.obj.get("debug", False)
+        orchestrator = VLLMOrchestrator(debug=debug)
+        config_path = orchestrator.config.config_path
         
-        profile_data = None
-        profile_type = None
-
-        if isinstance(servers, dict) and name in servers:
-            profile_data = servers[name]
-            profile_type = "server"
-        elif isinstance(clients, dict) and name in clients:
-            profile_data = clients[name]
-            profile_type = "client"
+        # Try to get as server first, then as client
+        profile_data = orchestrator.config.get_server(name)
+        profile_type = "server" if profile_data else None
+        
+        if not profile_data:
+            profile_data = orchestrator.config.get_client(name)
+            profile_type = "client" if profile_data else None
 
         if profile_data:
             banner_title = f"LLM {profile_type.capitalize()} Profile: {name}"
-            # Convert to dict if it's a DotDict for clean printing
             data_to_print = profile_data.to_dict() if hasattr(profile_data, 'to_dict') else profile_data
             
-            # Start with the config file path
             lines = [f"Config File: {config_path}"]
             lines.extend([f"{k}: {v}" for k, v in data_to_print.items()])
             formatted_data = "\n".join(lines)
@@ -478,6 +545,8 @@ def get_config(name):
             console.print(banner(banner_title, formatted_data))
         else:
             # Collect available profiles for a helpful error message
+            servers = orchestrator.config.get("cloudmesh.ai.server", {})
+            clients = orchestrator.config.get("cloudmesh.ai.client", {})
             available = []
             if isinstance(servers, dict): available.extend([f"server.{k}" for k in servers.keys()])
             if isinstance(clients, dict): available.extend([f"client.{k}" for k in clients.keys()])
@@ -492,22 +561,13 @@ def get_config(name):
 
 @llm_group.command(name="list")
 @click.argument("key", required=False)
-def list_config(key):
-    """List configuration leaf names or display merged config for a specific item.
-    
-    Usage:
-        cmc llm list              # List all leaf names in AI config
-        cmc llm list server       # List all configured servers
-        cmc llm list client       # List all configured clients
-        cmc llm list server.name  # Show merged config for a specific server
-    """
+@click.pass_context
+def list_config(ctx, key):
+    """List configuration leaf names or display merged config for a specific item."""
     try:
-        config_path = os.path.expanduser("~/.config/cloudmesh/llm.yaml")
-        if os.path.exists(config_path):
-            with open(config_path, 'r') as f:
-                db = DotDict(yaml.safe_load(f) or {})
-        else:
-            db = DotDict()
+        debug = ctx.obj.get("debug", False)
+        orchestrator = VLLMOrchestrator(debug=debug)
+        db = orchestrator.config.yaml_data
         
         def get_leaf_names(data, prefix=""):
             leaves = []
@@ -521,7 +581,7 @@ def list_config(key):
             return leaves
 
         if not key:
-            ai_config = db.get("cloudmesh.ai", {})
+            ai_config = db.get("cloudmesh", {}).get("ai", {})
             if not ai_config:
                 return
             
@@ -530,48 +590,36 @@ def list_config(key):
                 console.print(leaf)
             return
 
-        # Resolve the path in the config
-        full_key = f"cloudmesh.ai.{key}"
-        data = db.get(full_key)
-        
-        # Fallback: try looking under 'server' if not found at root
+        # Resolve the path in the config (using DotDict's smart get)
+        data = orchestrator.config.get(f"cloudmesh.ai.{key}")
         if data is None:
-            full_key = f"cloudmesh.ai.server.{key}"
-            data = db.get(full_key)
+            data = orchestrator.config.get(f"cloudmesh.ai.server.{key}")
         
         if data is None:
             return
 
         if isinstance(data, dict):
-            # If the key is a section (like 'server' or 'client'), list its child names
             if key in ["server", "client"] or (not "." in key and not any(k in key for k in ["host", "port", "model"])):
                 children = sorted(data.keys())
                 for child in children:
                     console.print(child)
             else:
-                # It's a specific item, use VLLMConfig to show merged data
-                item_name = key
-                if key.startswith("server."):
-                    item_name = key[len("server."):]
-                elif key.startswith("client."):
-                    item_name = key[len("client."):]
-                
-                config_obj = VLLMConfig()
+                # Show merged data for a specific item
+                item_name = key.replace("server.", "").replace("client.", "")
+                config_obj = VLLMConfig(item_name)
                 console.print(config_obj.yaml_data)
         else:
             console.print(data)
 
-    except Exception:
-        pass
+    except Exception as e:
+        console.debug(f"Error listing config for key {key}: {e}")
 
 @llm_group.command(name="info")
 def info_vllm():
-    """List all running vLLM servers."""
-    try:
-        orchestrator = VLLMOrchestrator()
-        orchestrator.list_running_servers()
-    except Exception as e:
-        console.error(f"Error listing servers: {e}")
+    """List all running vLLM servers (alias for 'status')."""
+    # Redirect to status without arguments
+    ctx = click.get_current_context()
+    ctx.invoke(status, name=None)
 
 @llm_group.command(name="install")
 @click.argument("tool")
@@ -647,7 +695,7 @@ def tunnel_group():
 def stop_tunnel(name):
     """Stop the SSH tunnel for a specific server."""
     try:
-        config_path = os.path.expanduser("~/.config/cloudmesh/llm.yaml")
+        config_path = VLLMConfig.DEFAULT_USER_CONFIG_PATH
         if os.path.exists(config_path):
             with open(config_path, 'r') as f:
                 db = DotDict(yaml.safe_load(f) or {})
@@ -686,51 +734,42 @@ llm_group.add_command(continue_group)
 @llm_group.command(name="default")
 @click.argument("type", type=click.Choice(['server', 'client'], case_sensitive=False))
 @click.argument("name")
-def set_default(type, name):
+@click.pass_context
+def set_default(ctx, type, name):
     """Set the default server or client. Usage: cmc llm default [server|client] [NAME]"""
     try:
-        config_path = os.path.expanduser("~/.config/cloudmesh/llm.yaml")
-        if os.path.exists(config_path):
-            with open(config_path, 'r') as f:
-                db = DotDict(yaml.safe_load(f) or {})
-        else:
-            db = DotDict()
+        debug = ctx.obj.get("debug", False)
+        orchestrator = VLLMOrchestrator(debug=debug)
+        db = orchestrator.config.yaml_data
         
-        # Set the value in the nested structure
-        if "cloudmesh" not in db: db["cloudmesh"] = DotDict()
-        if "ai" not in db.cloudmesh: db.cloudmesh["ai"] = DotDict()
-        if "default" not in db.cloudmesh.ai: db.cloudmesh.ai["default"] = DotDict()
-        db.cloudmesh.ai.default[type] = name
+        # Ensure nested structure exists
+        if "cloudmesh" not in db: db["cloudmesh"] = {}
+        if "ai" not in db["cloudmesh"]: db["cloudmesh"]["ai"] = {}
+        if "default" not in db["cloudmesh"]["ai"]: db["cloudmesh"]["ai"]["default"] = {}
+        db["cloudmesh"]["ai"]["default"][type] = name
         
-        # Save back to file
-        with open(config_path, 'w') as f:
-            yaml.dump(db.to_dict(), f)
+        with open(orchestrator.config.config_path, 'w') as f:
+            yaml.dump(db, f)
             
         console.ok(f"Default {type} set to: {name}")
     except Exception as e:
         console.error(f"Error setting default {type}: {e}")
 
 @llm_group.command(name="configure")
-def configure():
+@click.pass_context
+def configure(ctx):
     """Interactively configure vLLM settings."""
     try:
-        # 1. Config file path
-        config_path = os.path.expanduser("~/.config/cloudmesh/llm.yaml")
-        if os.path.exists(config_path):
-            with open(config_path, 'r') as f:
-                db = DotDict(yaml.safe_load(f) or {})
-        else:
-            db = DotDict()
+        debug = ctx.obj.get("debug", False)
+        orchestrator = VLLMOrchestrator(debug=debug)
+        db = orchestrator.config.yaml_data
+        config_path = orchestrator.config.config_path
         
-        # 2. Current state
-        current_server = None
-        if "cloudmesh" in db:
-            current_server = db.get("cloudmesh", {}).get("ai", {}).get("default", {}).get("server")
+        current_server = orchestrator.config.get("cloudmesh.ai.default.server")
         
         console.banner("vLLM Configuration", f"Config File: {config_path}\nCurrent Default Server: [bold]{current_server or 'Not set'}[/bold]")
         
-        # 3. List available servers from server config
-        servers = db.get("cloudmesh.ai.server", {})
+        servers = orchestrator.config.get("cloudmesh.ai.server", {})
         if servers:
             console.print("\n[bold]Available servers in llm.yaml:[/bold]")
             for name in sorted(servers.keys()):
@@ -739,19 +778,18 @@ def configure():
         else:
             console.warning("No servers found in llm.yaml.")
 
-        # 4. Interactive prompt
         console.print("\n")
         prompt_text = f"Enter default server [{current_server}]: " if current_server else "Enter default server: "
         new_server = input(prompt_text).strip()
         
         if new_server and new_server != current_server:
-            if "cloudmesh" not in db: db["cloudmesh"] = DotDict()
-            if "ai" not in db.cloudmesh: db.cloudmesh["ai"] = DotDict()
-            if "default" not in db.cloudmesh.ai: db.cloudmesh.ai["default"] = DotDict()
-            db.cloudmesh.ai.default["server"] = new_server
+            if "cloudmesh" not in db: db["cloudmesh"] = {}
+            if "ai" not in db["cloudmesh"]: db["cloudmesh"]["ai"] = {}
+            if "default" not in db["cloudmesh"]["ai"]: db["cloudmesh"]["ai"]["default"] = {}
+            db["cloudmesh"]["ai"]["default"]["server"] = new_server
             
             with open(config_path, 'w') as f:
-                yaml.dump(db.to_dict(), f)
+                yaml.dump(db, f)
                 
             console.ok(f"Default server updated to: {new_server}")
         elif not new_server and not current_server:
@@ -762,10 +800,27 @@ def configure():
     except Exception as e:
         console.error(f"Error during configuration: {e}")
 
+@llm_group.command(name="template")
+@click.argument("template_name", required=False)
+def template(template_name):
+    """List or apply a vLLM configuration template (e.g., gemma, llama)."""
+    manager = get_templates_manager()
+    if not template_name:
+        templates = manager.list_templates()
+        if not templates:
+            console.msg("No templates available.")
+            return
+        console.print(banner("Available vLLM Templates", "\n".join(templates)))
+    else:
+        if manager.apply_template(template_name):
+            console.ok(f"Template '{template_name}' applied successfully.")
+        else:
+            console.error(f"Failed to apply template '{template_name}'.")
+
 @llm_group.command(name="init")
 def init():
     """Initialize vLLM server configurations with defaults for DGX and UVA."""
-    config_path = os.path.expanduser("~/.config/cloudmesh/llm.yaml")
+    config_path = VLLMConfig.DEFAULT_USER_CONFIG_PATH
     
     if os.path.exists(config_path):
         console.warning(f"Configuration file already exists at {config_path}")
@@ -792,156 +847,12 @@ def reset():
     else:
         console.warning("Reset cancelled.")
 
-@llm_group.command(name="launch")
-@click.argument("client")
-@click.option("--port", type=int, help="Override the backend port for the client")
-def launch(client, port):
-    """Launch a specific LLM client (e.g., 'aider', 'openwebui')."""
-    if client == "aider":
-        try:
-            # Path to the config file (relative to this file: src/cloudmesh/ai/command/vllm.py)
-            # Templates are in src/cloudmesh/ai/vllm/config/templates/
-            config_path = Path(__file__).parent / ".." / "vllm" / "config" / "templates" / "aider.yaml"
-            
-            if not config_path.exists():
-                console.error(f"Config file not found at {config_path}")
-                return
- 
-            with open(config_path, 'r') as f:
-                config = yaml.safe_load(f)
-            
-            aider_config = config.get("cloudmesh", {}).get("ai", {}).get("aider", {})
-            model = aider_config.get("model")
-            key_file_path = aider_config.get("key_file")
-            url = aider_config.get("url")
- 
-            if not all([model, key_file_path, url]):
-                console.error("Missing required configuration (model, key_file, or url) in aider.yaml")
-                return
- 
-            key_path = Path(key_file_path).expanduser()
-            if not key_path.exists():
-                console.error(f"Key file not found at {key_path}")
-                return
- 
-            api_key = key_path.read_text().strip()
-            
-            # Override URL if port is provided
-            if port:
-                url = f"http://localhost:{port}/v1"
-            
-            launcher_config = {
-                "model": model,
-                "OPENAI_API_KEY": api_key,
-                "OPENAI_API_BASE": url,
-            }
-            
-            console.print("[blue]Launching Aider with Gemma 4...[/blue]")
-            AiderLauncher().launch(client_config=launcher_config)
-            
-        except Exception as e:
-            console.error(f"Error launching aider: {e}")
-    elif client == "openwebui":
-        try:
-            console.print("[blue]Launching Open WebUI...[/blue]")
-            from cloudmesh.ai.vllm.orchestrator import get_vllm_api_key
-            orchestrator = VLLMOrchestrator()
-            
-            # Resolve the correct port: use override if provided, otherwise default server or first running server
-            local_port = port
-            if not local_port:
-                default_server = orchestrator.config.get("cloudmesh.ai.default.server")
-                servers = orchestrator.config.get("cloudmesh.ai.server", {})
-                local_port = 8000
-                if default_server and isinstance(servers, dict):
-                    local_port = servers.get(default_server, {}).get("local_port", 8000)
-                elif isinstance(servers, dict):
-                    # Fallback: find the first server that is currently running (has a job_id)
-                    for s_name, s_cfg in servers.items():
-                        if isinstance(s_cfg, dict) and s_cfg.get("job_id"):
-                            local_port = s_cfg.get("local_port", 8000)
-                            break
-            
-            clients = orchestrator.config.get("cloudmesh.ai.client", {})
-            webui_cfg = clients.get("openwebui", {}) if isinstance(clients, dict) else {}
-            
-            # Ensure the API base matches the active server port
-            webui_cfg["OPENAI_API_BASE"] = f"http://localhost:{local_port}/v1"
-            
-            # Resolve the API key explicitly to avoid "not found" errors in WebUILauncher
-            raw_key = webui_cfg.get("OPENAI_API_KEY") or webui_cfg.get("openai_api_key")
-            api_key = None
-            if raw_key:
-                if raw_key.startswith("{") and raw_key.endswith("}"):
-                    lookup_key = raw_key[1:-1]
-                    api_key = get_vllm_api_key(orchestrator.config, lookup_key=lookup_key)
-                else:
-                    api_key = raw_key
-            
-            if not api_key:
-                api_key = get_vllm_api_key(orchestrator.config)
-                
-            if api_key:
-                webui_cfg["OPENAI_API_KEY"] = api_key
-            
-            WebUILauncher().launch(client_config=webui_cfg)
-        except Exception as e:
-            console.error(f"Error launching openwebui: {e}")
-    elif client == "claude":
-        try:
-            console.print("[blue]Launching Claude CLI...[/blue]")
-            from cloudmesh.ai.vllm.orchestrator import get_vllm_api_key
-            orchestrator = VLLMOrchestrator()
-            
-            # Resolve the correct port: use override if provided, otherwise default server or first running server
-            local_port = port
-            if not local_port:
-                default_server = orchestrator.config.get("cloudmesh.ai.default.server")
-                servers = orchestrator.config.get("cloudmesh.ai.server", {})
-                local_port = 8000
-                if default_server and isinstance(servers, dict):
-                    local_port = servers.get(default_server, {}).get("local_port", 8000)
-                elif isinstance(servers, dict):
-                    # Fallback: find the first server that is currently running (has a job_id)
-                    for s_name, s_cfg in servers.items():
-                        if isinstance(s_cfg, dict) and s_cfg.get("job_id"):
-                            local_port = s_cfg.get("local_port", 8000)
-                            break
-            
-            clients = orchestrator.config.get("cloudmesh.ai.client", {})
-            claude_cfg = clients.get("claude", {}) if isinstance(clients, dict) else {}
-            
-            # Ensure the API base matches the active server port
-            claude_cfg["OPENAI_API_BASE"] = f"http://localhost:{local_port}/v1"
-            
-            # Resolve the API key explicitly to avoid "not found" errors in ClaudeLauncher
-            raw_key = claude_cfg.get("OPENAI_API_KEY") or claude_cfg.get("openai_api_key")
-            api_key = None
-            if raw_key:
-                if raw_key.startswith("{") and raw_key.endswith("}"):
-                    lookup_key = raw_key[1:-1]
-                    api_key = get_vllm_api_key(orchestrator.config, lookup_key=lookup_key)
-                else:
-                    api_key = raw_key
-            
-            if not api_key:
-                api_key = get_vllm_api_key(orchestrator.config)
-                
-            if api_key:
-                claude_cfg["OPENAI_API_KEY"] = api_key
-            
-                from cloudmesh.ai.vllm.claude_launcher import ClaudeLauncher
-                ClaudeLauncher().launch(client_config=claude_cfg)
-        except Exception as e:
-            console.error(f"Error launching claude: {e}")
-    else:
-        console.error(f"Unsupported client '{client}'. Supported clients: aider, openwebui, claude")
 
 @llm_group.command(name="prompt")
 @click.argument("text", required=False)
 @click.option("--file", type=click.Path(exists=True), help="Prompt from file")
 def prompt(text, file):
-    """Send a prompt to the vLLM API."""
+    """Send a prompt to the vLLM API using the configured default server."""
     prompt_text = ""
     if file:
         with open(file, "r") as f:
@@ -953,12 +864,32 @@ def prompt(text, file):
         return
 
     try:
+        orchestrator = VLLMOrchestrator()
+        # Resolve default server identity and config
+        identity = orchestrator.config.resolve_server_identity("default")
+        server_name = identity.get("server_name")
+        
+        server_config = orchestrator.config.get_server(server_name) if server_name else {}
+        
+        # Use config values with sensible fallbacks
+        model = server_config.get("model", "google/gemma-4-31B-it")
+        port = identity.get("port", 8000)
+        api_key = get_vllm_api_key(orchestrator.config)
+        
+        url = f"http://127.0.0.1:{port}/v1/chat/completions"
+        
         payload = {
-            "model": "google/gemma-4-31B-it", # Default model
+            "model": model,
             "messages": [{"role": "user", "content": prompt_text}],
             "temperature": 0.7
         }
-        response = requests.post("http://127.0.0.1:8000/v1/chat/completions", json=payload, timeout=60)
+        
+        headers = {}
+        if api_key:
+            headers["Authorization"] = f"Bearer {api_key}"
+            
+        console.print(f"[dim]Prompting model {model} on port {port}...[/dim]")
+        response = requests.post(url, json=payload, headers=headers, timeout=60)
         response.raise_for_status()
         result = response.json()
         content = result['choices'][0]['message']['content']
@@ -976,7 +907,8 @@ def register(cli=None, **kwargs):
         standalone_mode = kwargs.get('standalone_mode', True)
         try:
             llm_group.main(args=args, standalone_mode=standalone_mode)
-        except Exception:
+        except Exception as e:
+            console.debug(f"Fallback to direct llm_group call due to: {e}")
             # Fallback for cases where .main() is not available or fails
             llm_group()
         return

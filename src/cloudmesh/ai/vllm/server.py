@@ -15,8 +15,9 @@ class Server(ABC):
     Abstract base class for vLLM server implementations.
     """
 
-    def __init__(self, host: str, db=None, launch_mode: str = "remote"):
+    def __init__(self, host: str, db=None, launch_mode: str = "remote", debug: bool = False):
         self.host = host
+        self.debug = debug
         self.logger = logging.getLogger(self.__class__.__name__)
         self.launch_mode = launch_mode  # "local" or "remote"
         
@@ -24,7 +25,7 @@ class Server(ABC):
             self.db = db
         else:
             # Use a standard path for the vLLM server configurations
-            config_path = os.path.expanduser("~/.config/cloudmesh/llm.yaml")
+            config_path = VLLMConfig.DEFAULT_USER_CONFIG_PATH
             if os.path.exists(config_path):
                 with open(config_path, 'r') as f:
                     self.db = DotDict(yaml.safe_load(f) or {})
@@ -152,6 +153,12 @@ class Server(ABC):
         """
         Execute command - either locally or via SSH based on launch_mode.
         """
+        if self.debug:
+            if self.launch_mode == "local":
+                console.print(f"[dim]DEBUG (SSH/CMD): {cmd}[/dim]")
+            else:
+                console.print(f"[dim]DEBUG (SSH/CMD): ssh {self.host} '{cmd}'[/dim]")
+
         if self.launch_mode == "local":
             self.logger.debug(f"[LOCAL] {cmd}")
             return subprocess.run(cmd, shell=True, capture_output=True, text=True)
@@ -178,6 +185,8 @@ class Server(ABC):
             self._execute(f"mkdir -p {dir_path}")
             
             ssh_cmd = ["ssh", self.host, f"cat << 'EOF' > {path}\n{content}\nEOF"]
+            if self.debug:
+                console.print(f"[dim]DEBUG (SSH/CMD): {' '.join(ssh_cmd)}[/dim]")
             subprocess.run(ssh_cmd, capture_output=True, text=True, check=True)
             self._execute(f"chmod +x {path}")
             self.logger.debug(f"[REMOTE:{self.host}] Script uploaded to {path}")

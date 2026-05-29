@@ -6,6 +6,7 @@ import time
 from cloudmesh.ai.common import banner
 from cloudmesh.ai.common.io import console
 from cloudmesh.ai.common.sys import os_is_mac
+from cloudmesh.ai.vllm.config import VLLMConfig
 from yamldb import YamlDB
 
 
@@ -71,7 +72,7 @@ class WebUILauncher:
         self.docker = DockerManager()
         # Use YamlDB to load the resolved configuration in memory
         self.db = YamlDB(
-            filename=os.path.expanduser("~/.config/cloudmesh/llm.yaml"),
+            filename=VLLMConfig.DEFAULT_USER_CONFIG_PATH,
             backend=":memory:",
         )
         self.container_name = "open-webui"

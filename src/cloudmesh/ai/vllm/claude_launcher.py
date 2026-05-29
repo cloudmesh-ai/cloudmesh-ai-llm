@@ -1,5 +1,6 @@
 import os
 import subprocess
+from cloudmesh.ai.vllm.config import VLLMConfig
 from yamldb import YamlDB
 from cloudmesh.ai.common import banner
 from cloudmesh.ai.common.io import console
@@ -9,7 +10,7 @@ class ClaudeLauncher:
 
     def __init__(self):
         # Use YamlDB to load the resolved configuration in memory
-        self.db = YamlDB(filename=os.path.expanduser("~/.config/cloudmesh/llm.yaml"), backend=":memory:")
+        self.db = YamlDB(filename=VLLMConfig.DEFAULT_USER_CONFIG_PATH, backend=":memory:")
 
     def _get_claude_model(self, model):
         """Return the model name as is for vLLM backends."""

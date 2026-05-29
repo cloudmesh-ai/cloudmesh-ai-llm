@@ -85,7 +85,7 @@ def init_group():
 @click.argument("host")
 def init_server(host):
     """Initialize server configuration in llm.yaml from SSH config host."""
-    config_path = os.path.expanduser("~/.config/cloudmesh/llm.yaml")
+    config_path = VLLMConfig.DEFAULT_USER_CONFIG_PATH
 
     # Ensure directory exists
     os.makedirs(os.path.dirname(config_path), exist_ok=True)

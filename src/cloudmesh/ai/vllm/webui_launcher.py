@@ -5,6 +5,7 @@ import urllib.request
 import yaml
 from cloudmesh.ai.common import banner, DotDict
 from cloudmesh.ai.common.io import console
+from cloudmesh.ai.vllm.config import VLLMConfig
 from cloudmesh.ai.vllm.docker_manager import DockerManager
 
 class WebUILauncher:
@@ -12,7 +13,7 @@ class WebUILauncher:
 
     def __init__(self):
         self.docker = DockerManager()
-        config_path = os.path.expanduser("~/.config/cloudmesh/llm.yaml")
+        config_path = VLLMConfig.DEFAULT_USER_CONFIG_PATH
         if os.path.exists(config_path):
             with open(config_path, 'r') as f:
                 self.db = DotDict(yaml.safe_load(f) or {})

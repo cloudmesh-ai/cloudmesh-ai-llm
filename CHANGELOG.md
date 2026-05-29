@@ -4,6 +4,7 @@ All notable changes to `cloudmesh-ai-llm` will be documented in this file.
 
 ## [Unreleased]
 ### Added
+- **Configuration Templates**: Added `cmc llm template` command and pre-defined templates (Gemma, Llama) to simplify initial configuration setup.
 - **Specialized Client Launcher**: Added `cmc llm launch <client>` (e.g., `cmc llm launch aider`) to provide a unified way to launch LLM clients.
 - **Automatic VPN Connection**: Integrated VPN check and connection directly into the `cmc llm start` pipeline.
 

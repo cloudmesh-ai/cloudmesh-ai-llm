@@ -239,6 +239,38 @@ class VLLMConfig(DotDict):
         """
         return DotDict.yaml.fget(self)
 
+    def resolve_server_identity(self, name):
+        """Resolves the core identity (host, user, port) for a specific server.
+
+        Args:
+            name (str): The server name (e.g., 'uva.gemma').
+
+        Returns:
+            dict: A dictionary containing 'host', 'user', and 'port'.
+        """
+        server_config = self.get_server(name)
+        if not server_config:
+            return {"host": None, "user": None, "port": 8000}
+
+        # Resolve user: server-specific -> global config -> system login
+        user = server_config.get("user")
+        if not user:
+            user = self.get("user") or self.get("cloudmesh.ai.user") or os.getlogin()
+
+        # Resolve port: server-specific 'remote_port' or 'port' -> global 'port' -> default 8000
+        port = server_config.get("remote_port") or server_config.get("port") or self.get("port") or 8000
+
+        # Resolve host: server-specific -> fallback to the host part of the name if available
+        host = server_config.get("host")
+        if not host and "." in name:
+            host = name.split(".")[0]
+
+        return {
+            "host": host,
+            "user": user,
+            "port": int(port),
+        }
+
     def get_server(self, name):
         """Returns the configuration for a specific server.
 

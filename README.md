@@ -2,7 +2,7 @@
 
 The Cloudmesh AI LLM Orchestrator provides a unified interface to launch, manage, and connect to Large Language Model (LLM) backends across diverse computing environments, including local machines, DGX clusters, and UVA HPC.
 
-For the full interactive documentation, please visit: [https://cloudmesh-ai.github.io/cloudmesh-ai-llm/](https://cloudmesh-ai.github.io/cloudmesh-ai-llm/)
+For the full interactive documentation, please visit: <https://cloudmesh-ai.github.io/cloudmesh-ai-llm/>
 
 ## Features
 
@@ -12,6 +12,9 @@ For the full interactive documentation, please visit: [https://cloudmesh-ai.gith
 - **Hybrid Script-Driven Approach**: Uses shell scripts for the actual vLLM launch, allowing maximum flexibility for GPU flags and mount points.
 - **Local Export & Customization**: Export launch scripts locally, modify them, and the orchestrator will use your customized versions.
 - **Performance Monitoring**: Integrated benchmarking to measure the duration of each startup phase (VPN, Allocation, Model Loading).
+- **Observability**: Global `--debug` mode to expose raw SSH commands and API requests for easier troubleshooting.
+- **Robust Process Management**: Automatic tracking and cleanup of background processes (tunnels and log streams) to prevent resource leaks.
+- **Configuration Templates**: Quickly set up common models (e.g., Gemma, Llama) using pre-defined templates.
 
 ------------------------------------------------------------------------
 
@@ -30,8 +33,10 @@ cloudmesh:
       gemma-uva:
         platform: uva
         host: uva
-        user: "{~/.ssh/config:uva.user}" # Optional: resolves from ~/.ssh/config
-        dir: "/scratch/{user}/cloudmesh/vllm/{port}" # Optional: {user} and {port} are replaced at runtime. Defaults to /scratch/${USER}/cloudmesh/vllm_{port}
+        user: "{~/.ssh/config:uva.user}" 
+              # Optional: resolves from ~/.ssh/config
+        dir: "/scratch/{user}/cloudmesh/vllm/{port}" 
+             # Optional: {user} and {port} are replaced at runtime. Defaults to /scratch/${USER}/cloudmesh/vllm_{port}
         local_port: 18123
         remote_port: 18123
         model: "google/gemma-4-31B-it"
@@ -48,8 +53,10 @@ cloudmesh:
       gemma-dgx:
         platform: dgx
         host: dgx
-        user: "{~/.ssh/config:dgx.user}" # Optional: resolves from ~/.ssh/config
-        dir: "/raid/{user}/cloudmesh/vllm/{port}" # Optional: {user} and {port} are replaced at runtime. Defaults to /raid/${USER}/cloudmesh/vllm_{port}
+        user: "{~/.ssh/config:dgx.user}" 
+              # Optional: resolves from ~/.ssh/config
+        dir: "/raid/{user}/cloudmesh/vllm/{port}" 
+             # Optional: {user} and {port} are replaced at runtime. Defaults to /raid/${USER}/cloudmesh/vllm_{port}
         local_port: 8000
         remote_port: 8000
         model: "google/gemma-4-31B-it"
@@ -57,7 +64,7 @@ cloudmesh:
 
 ### 3. Client Configuration
 
-You can define clients (like Open WebUI or Aider) in the same `llm.yaml` file. These configurations are used when launching clients via `cmc llm launch`.
+You can define clients (like Open WebUI or Aider) in the same `llm.yaml` file. These configurations are used when launching clients via `cmc llm start`.
 
 ``` yaml
 cloudmesh:
@@ -86,28 +93,97 @@ The orchestrator can launch specialized AI clients that connect to your running 
 - **Open WebUI**: A full-featured web interface for interacting with your models.
 
   ``` bash
-  cmc llm launch openwebui
+  cmc llm start openwebui
   ```
 
 - **Aider**: An AI pair programming tool that works directly in your terminal and git repo.
 
   ``` bash
-  cmc llm launch aider
+  cmc llm start aider
   ```
 
 - **Claude CLI**: Launch Claude Code configured to use your vLLM backend.
 
   ``` bash
-  cmc llm launch claude
+  cmc llm start claude
+  ```
+
+- **Cline AI Agent**: Synchronize your LLM profiles directly into Cline's settings.
+
+  ``` bash
+  cmc llm cline <profile> [--plan <model>] [--act <model>]
+  ```
+
+### Cline Configuration
+
+Instead of manually editing JSON files, you can manage Cline's configuration using the `cmc llm cline` suite:
+
+- **Sync Profile**: Set Cline's Plan and Act models from an `llm.yaml` profile.
+
+  ``` bash
+  cmc llm cline uva.gemma
+  ```
+
+- **Override Models**: Specify different models for planning and acting.
+
+  ``` bash
+  cmc llm cline uva.gemma --act gemma-2-9b
+  ```
+
+- **Manage Secrets**: Securely set API keys for Cline.
+
+  ``` bash
+  cmc llm cline secrets set api_key <your-key>
+  ```
+
+- **Quick Utils**: Use `list` to see all settings or `edit` to open the config file in your editor.
+
+  ``` bash
+  cmc llm cline list
+  cmc llm cline edit
   ```
 
 ### The UVA Pipeline
 
-When you run `cmc llm start gemma-uva`, the following happens: 1. **VPN**: Checks and connects to the UVA VPN. 2. **Allocation**: Submits a Slurm batch script to request GPU resources. 3. **Node Capture**: Polls the cluster to identify the allocated compute node. 4. **Deployment**: Uploads `start_uva.sh` to the node. 5. **Execution**: Runs the script via Apptainer to start the vLLM server. 6. **Health Check**: Verifies the server is alive on the remote node via SSH. 7. **Dynamic Tunnel**: Establishes an SSH tunnel from your local port to the allocated node in a separate background process once the server is ready.
+When you run `cmc llm start gemma-uva`, the following happens:
+
+1\. **VPN**: Checks and connects to the UVA VPN.
+
+2\. **Allocation**: Submits a Slurm batch script to request GPU resources.
+
+3\. **Node Capture**: Polls the cluster to identify the allocated compute node.
+
+4\. **Deployment**: Uploads `start_uva.sh` to the node.
+
+5\. **Execution**: Runs the script via Apptainer to start the vLLM server.
+
+6\. **Health Check**: Verifies the server is alive on the remote node via SSH.
+
+7\. **Dynamic Tunnel**: Establishes an SSH tunnel from your local port to the allocated node in a separate background process once the server is ready.
 
 ### The DGX Pipeline
 
-When you run `cmc llm start gemma-dgx`: 1. **VPN**: Ensures the VPN is active. 2. **Execution**: Runs the `start_dgx.sh` script (typically using Docker). 3. **Health Check**: Polls the API until the model is fully loaded.
+When you run `cmc llm start gemma-dgx`:
+
+1\. **VPN**: Ensures the VPN is active.
+
+2\. **Execution**: Runs the `start_dgx.sh` script (typically using Docker).
+
+3\. **Health Check**: Polls the API until the model is fully loaded.
+
+### Configuration Templates
+
+To avoid manual YAML editing, you can apply standard templates for popular models:
+
+- **List available templates**:
+  ``` bash
+  cmc llm template
+  ```
+- **Apply a template**:
+  ``` bash
+  cmc llm template gemma
+  ```
+  This merges the template configuration into your `llm.yaml` while preserving your existing settings.
 
 ------------------------------------------------------------------------
 
@@ -150,16 +226,19 @@ cmc llm start gemma-uva
 
 | Command | Description |
 |:-----------------------------------|:-----------------------------------|
-| `cmc llm start <name>` | Full pipeline: VPN $\rightarrow$ Launch $\rightarrow$ Tunnel $\rightarrow$ Health Check. |
+| `cmc llm start <name>` | Start a server (Full pipeline) OR launch a client (e.g. `aider`, `webui`). |
 | `cmc llm start <name> --port <port>` | Launch with a specific port override (local and remote). |
 | `cmc llm start <name> --export` | Exports the launch scripts and config to the current directory for editing. |
 | `cmc llm start <name> --ui` | Launches the backend and then automatically starts the Open WebUI. |
 | `cmc llm start <name> --claude` | Launches the backend and then starts Claude Code. |
-| `cmc llm launch <client>` | Launches a specialized client (e.g., `openwebui`, `aider`, `claude`). |
 | `cmc llm stop [ID/Name/Port]` | Stops a server using JobID, server name, or port. If no ID is provided, stops the last started server. |
-| `cmc llm info` | Lists all currently running vLLM servers on the platform. |
+| `cmc llm status [name]` | Lists all running servers, or shows detailed status for a specific server. |
+| `cmc llm processes` | List all background processes managed by the orchestrator (tunnels, logs). |
+| `cmc llm logs <name> [--follow] [--grep <keyword>]` | Retrieve or stream server logs, with optional keyword filtering. |
 | `cmc llm default server <name>` | Sets the default server for the `llm` group. |
+| `cmc llm template [name]` | List available templates or apply a specific one (e.g., `gemma`, `llama`) to the config. |
 | `cmc llm configure` | Interactively configure vLLM settings. |
+| `cmc llm --debug <command>` | Global flag to print raw SSH/API commands for any `llm` subcommand. |
 
 ------------------------------------------------------------------------
 
@@ -220,7 +299,7 @@ Open WebUI provides a ChatGPT-like interface for your self-hosted models.
 2.  **Launch the UI**:
 
     ``` bash
-    cmc llm launch openwebui
+    cmc llm start openwebui
     ```
 
 3.  **Access**: The orchestrator will start a Docker container and automatically open your default browser to `http://localhost:3000`.
@@ -236,7 +315,7 @@ Aider is an AI pair programming tool that allows you to edit code in your local 
 2.  **Launch Aider**:
 
     ``` bash
-    cmc llm launch aider
+    cmc llm start aider
     ```
 
 3.  **Usage**: Aider will start in your terminal. You can now ask it to implement features or fix bugs in your current directory.
@@ -252,7 +331,7 @@ Claude Code is a CLI tool that provides an agentic interface for coding and syst
 2.  **Launch Claude**:
 
     ``` bash
-    cmc llm launch claude
+    cmc llm start claude
     ```
 
 3.  **Usage**: Claude will start in your terminal, connected to your vLLM backend via the configuration in `llm.yaml`.

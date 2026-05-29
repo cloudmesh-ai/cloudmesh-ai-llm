@@ -83,7 +83,7 @@ def get_vllm_api_key(config, keys_path_override=None, lookup_key=None):
 def get_default_host(db=None):
     """Retrieve the default host by resolving the default server name."""
     if db is None:
-        config_path = os.path.expanduser("~/.config/cloudmesh/llm.yaml")
+        config_path = VLLMConfig.DEFAULT_USER_CONFIG_PATH
         if os.path.exists(config_path):
             with open(config_path, "r") as f:
                 db = DotDict(yaml.safe_load(f) or {})
@@ -138,11 +138,17 @@ def get_server(host, db=None, server_name=None, launch_mode=None):
 class VLLMOrchestrator:
     """Orchestrates the full pipeline from server start to client launch."""
 
-    def __init__(self):
+    def __init__(self, debug: bool = False):
+        self.debug = debug
         self.config = VLLMConfig()
         self.state_path = os.path.expanduser("~/.config/cloudmesh/llm_state.json")
         self.template_dir = Path(__file__).parent / "configuration" / "templates"
         self.server_config = {}
+
+    def log_debug(self, msg: str):
+        """Print debug message if debug mode is enabled."""
+        if self.debug:
+            console.print(f"[dim]DEBUG: {msg}[/dim]")
 
     def _load_state(self) -> dict:
         """Load runtime state from JSON file."""
@@ -215,20 +221,31 @@ class VLLMOrchestrator:
         return name
 
     def _kill_port_process(self, port: int):
-        """Kill any process currently binding to the specified local port."""
+        """Kill any process currently binding to the specified local port gracefully."""
         try:
             # Use lsof to find the PID of the process using the port
             cmd = f"lsof -t -iTCP:{port} -sTCP:LISTEN"
             result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
-            pid = result.stdout.strip()
-            if pid:
-                # PID can be a list of PIDs separated by newlines
-                for p in pid.split("\n"):
-                    if p:
-                        subprocess.run(f"kill -9 {p}", shell=True)
-                        console.print(
-                            f"[dim]Killed existing process {p} on port {port}[/dim]"
-                        )
+            pid_list = result.stdout.strip().split("\n") if result.stdout.strip() else []
+            
+            for p in pid_list:
+                if not p:
+                    continue
+                
+                # 1. Try SIGTERM first
+                subprocess.run(f"kill {p}", shell=True, capture_output=True)
+                
+                # Wait a short moment for graceful shutdown
+                time.sleep(0.5)
+                
+                # 2. Check if still running, then use SIGKILL
+                check = subprocess.run(f"ps -p {p}", shell=True, capture_output=True)
+                if check.returncode == 0:
+                    subprocess.run(f"kill -9 {p}", shell=True, capture_output=True)
+                    console.print(f"[dim]Forcefully killed process {p} on port {port}[/dim]")
+                else:
+                    console.print(f"[dim]Gracefully stopped process {p} on port {port}[/dim]")
+                    
         except Exception as e:
             console.warning(f"Could not kill process on port {port}: {e}")
 
@@ -761,23 +778,11 @@ class VLLMOrchestrator:
             self.server_config["remote_port"] = port_override
             self.server_config["local_port"] = port_override
 
-        # Ensure 'user' is available for expansion in server_config.
-        # Prioritize server-specific user, then global config user, then system login.
-        if not self.server_config.get("user"):
-            # Try to find user in global config (could be at root or under cloudmesh.ai)
-            global_user = self.config.get("user") or self.config.get(
-                "cloudmesh.ai.user"
-            )
-
-            # If we have a global user, use it. Otherwise, fallback to system login.
-            # We use os.getlogin() as a last resort, but we'll log it.
-            if global_user:
-                self.server_config["user"] = global_user
-            else:
-                self.server_config["user"] = os.getlogin()
-                console.print(
-                    f"[dim]No user found in config, falling back to system login: {os.getlogin()}[/dim]"
-                )
+        # Centralize identity resolution (host, user, port)
+        identity = self.config.resolve_server_identity(name)
+        self.server_config["host"] = identity["host"]
+        self.server_config["user"] = identity["user"]
+        self.server_config["remote_port"] = identity["port"]
 
         # Update job_name if it contains a port and we have an override
         current_name = self.server_config.get("name", "")
@@ -893,7 +898,7 @@ class VLLMOrchestrator:
             )
 
         server = get_server(target_host, server_name=name)
-        client = VLLMClient(self.config)
+        client = VLLMClient(self.config, server_name=name)
 
         console.print(
             banner(
@@ -1065,14 +1070,15 @@ class VLLMOrchestrator:
                 )
                 port_open = port_res.returncode == 0
 
-                # Check health endpoint via curl with API key if available
-                health_check_cmd = f'ssh -q uva "curl -s -f {auth_header} http://{node_name}:{remote_port}/health"'
-                # console.print(f"[dim]Executing health check: {health_check_cmd}[/dim]")
+                # Check if model is actually loaded by calling /v1/models
+                # /health only indicates the process is running; /v1/models indicates the model is serving.
+                health_check_cmd = f'ssh -q uva "curl -s -f {auth_header} http://{node_name}:{remote_port}/v1/models"'
+                # console.print(f"[dim]Executing robust health check: {health_check_cmd}[/dim]")
                 health_res = subprocess.run(
                     health_check_cmd, shell=True, capture_output=True, text=True
                 )
 
-                # Consider it ready if the curl command succeeded (HTTP 200)
+                # Consider it ready if the /v1/models call succeeded (HTTP 200)
                 app_ready = health_res.returncode == 0
 
                 # 3. Check Slurm output files for the success message
