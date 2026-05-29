@@ -52,9 +52,6 @@ class VLLMConfig(DotDict):
     Inherits from DotDict to allow direct attribute access to configuration.
     """
 
-    DEFAULT_USER_CONFIG_PATH = os.path.expanduser("~/.config/cloudmesh/llm.yaml")
-    _global_cache = None
-
     def __init__(self, db=None, user_config_path=None):
         """Initializes the VLLMConfig.
 
@@ -64,14 +61,14 @@ class VLLMConfig(DotDict):
             user_config_path (str, optional): Path to the user configuration YAML file.
                 Defaults to DEFAULT_USER_CONFIG_PATH.
         """
-        self.user_config_path = user_config_path or self.DEFAULT_USER_CONFIG_PATH
+        self.user_config_path = user_config_path or os.path.expanduser("~/.config/cloudmesh/llm.yaml")
         self._config = self._get_global_config(db)
         
         # Initialize DotDict with the full merged configuration
         super().__init__(self._config)
 
     def _get_global_config(self, db):
-        """Handles loading and caching of the global configuration.
+        """Handles loading of the global configuration.
 
         Args:
             db (DotDict, optional): A pre-loaded configuration database.
@@ -79,14 +76,16 @@ class VLLMConfig(DotDict):
         Returns:
             DotDict: The merged global configuration database.
         """
-        if db is not None:
-            return db
+        # Always load the merged internal + user config first
+        merged_data = DotDict(self._load_merged_config())
         
-        if VLLMConfig._global_cache is None:
-            global_data = self._load_merged_config()
-            VLLMConfig._global_cache = DotDict(global_data)
+        # If a specific db is provided (e.g. for tests), merge it on top
+        # Only merge if db is a mapping. If it's a callable (like a lambda), 
+        # we can't merge it into the DotDict.
+        if db is not None and not callable(db):
+            merged_data.merge(db)
             
-        return VLLMConfig._global_cache
+        return merged_data
 
     def _load_merged_config(self):
         """Loads internal and user configurations and merges them.
@@ -280,19 +279,44 @@ class VLLMConfig(DotDict):
         Returns:
             DotDict: The configuration for the specified server, or None if not found.
         """
-        # Try direct dot-notation lookup first
+        # 1. Try direct dot-notation lookup under cloudmesh.ai.server
         server_config = self.get(f"cloudmesh.ai.server.{name}")
         if server_config:
             return server_config
 
-        # Fallback: Manual traversal to ensure we find the server config
+        # 2. Try direct lookup at the root (for flat config support)
+        root_config = self.get(name)
+        if isinstance(root_config, (dict, DotDict)):
+            return root_config
+
+        # 3. Recursive search under cloudmesh.ai.server
+        # This handles cases where the server is nested (e.g., cloudmesh.ai.server.uva.gemma)
+        # but requested as just 'gemma'
+        servers = self.get("cloudmesh.ai.server", {})
+        if isinstance(servers, dict):
+            def find_in_dict(d, target):
+                if target in d:
+                    return d[target]
+                for k, v in d.items():
+                    if isinstance(v, dict):
+                        res = find_in_dict(v, target)
+                        if res: return res
+                return None
+            
+            found = find_in_dict(servers, name)
+            if found:
+                return found
+
+        # 4. Manual traversal as a last resort
         try:
             current = self
             for part in ["cloudmesh", "ai", "server"] + name.split("."):
                 current = current[part]
             return current
         except (KeyError, TypeError):
-            return None
+            pass
+
+        return None
 
     def smart_get(self, key, default=None):
         """Retrieves a value from the configuration using a smart lookup.

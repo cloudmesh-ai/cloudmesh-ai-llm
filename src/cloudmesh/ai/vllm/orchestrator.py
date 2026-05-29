@@ -101,7 +101,9 @@ def get_default_host(db=None):
         default_server_name = next(iter(servers))
 
     try:
-        return VLLMConfig(default_server_name, db=db).get("host")
+        config = VLLMConfig(db=db)
+        server_cfg = config.get_server(default_server_name)
+        return server_cfg.get("host") if server_cfg else None
     except Exception:
         return None
 
@@ -782,16 +784,12 @@ class VLLMOrchestrator:
         identity = self.config.resolve_server_identity(name)
         self.server_config["host"] = identity["host"]
         self.server_config["user"] = identity["user"]
-        self.server_config["remote_port"] = identity["port"]
+        # Use port_override if provided, otherwise fallback to identity port
+        self.server_config["remote_port"] = port_override or identity["port"]
 
-        # Update job_name if it contains a port and we have an override
-        current_name = self.server_config.get("name", "")
-        if port_override and current_name:
-            # Replace any port-like number at the end of the name with the override
-            # Matches _12345 at the end of the string
-            self.server_config["name"] = re.sub(
-                r"_\d+$", f"_{port_override}", current_name
-            )
+        # Update job_name to reflect the port if an override is provided
+        if port_override:
+            self.server_config["name"] = self.get_job_name(self.server_config, port_override)
 
         # Pre-calculate remote_dir so it can be expanded in the final pass
         # Default to a common pattern if not specified in config

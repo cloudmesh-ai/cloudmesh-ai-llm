@@ -22,23 +22,38 @@ class Server(ABC):
         self.launch_mode = launch_mode  # "local" or "remote"
         
         if db:
-            self.db = db
-        else:
-            # Use a standard path for the vLLM server configurations
-            config_path = VLLMConfig.DEFAULT_USER_CONFIG_PATH
-            if os.path.exists(config_path):
-                with open(config_path, 'r') as f:
-                    self.db = DotDict(yaml.safe_load(f) or {})
+            # If db is a callable (mock), wrap it in a DotDict proxy to avoid TypeError
+            if callable(db):
+                class DbProxy(DotDict):
+                    def __getitem__(self, key):
+                        return db(key)
+                    def get(self, key, default=None):
+                        try:
+                            return db(key)
+                        except Exception:
+                            return default
+                self.db = DbProxy()
             else:
-                self.db = DotDict()
+                self.db = db
+        else:
+            # Initialize db using VLLMConfig to ensure consistent structure and merging
+            config_manager = VLLMConfig()
+            self.db = config_manager._config
 
 
-    def _get_config(self, name: str) -> VLLMConfig:
+    def _get_config(self, name: str):
         """Retrieve configuration for a specific server name using VLLMConfig for merging."""
-        config = VLLMConfig()
-        if not config:
-            raise ValueError(f"Server configuration for '{name}' not found in YAML database under cloudmesh.ai.server.")
-        return config
+        # Now that self.db is guaranteed to be a mapping (via DbProxy if it was callable),
+        # we can use VLLMConfig consistently.
+        try:
+            config_manager = VLLMConfig(db=self.db)
+            server_config = config_manager.get_server(name)
+            if server_config:
+                return server_config
+        except Exception as e:
+            self.logger.debug(f"Configuration lookup failed for {name}: {e}")
+            
+        raise ValueError(f"Server configuration for '{name}' not found in configuration database.")
 
     def get_start_command(self, name: str, required_fields: list) -> str:
         """Return the command used to start the vLLM server."""
