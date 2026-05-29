@@ -215,12 +215,13 @@ class VLLMOrchestrator:
     def get_job_name(self, config, port):
         """Resolve the Slurm job name based on config and port."""
         name = config.get("name", "vllm_server")
-        # If the name has a port placeholder or we want to ensure the port is appended
+        # If the name has a port placeholder, replace it and return
         if "{port}" in name:
             return name.replace("{port}", str(port))
-        if not name.endswith(f"_{port}"):
-            return f"{name}_{port}"
-        return name
+        
+        # Remove any existing port suffix (_digits) to prevent duplication
+        base_name = re.sub(r"_\d+$", "", name)
+        return f"{base_name}_{port}"
 
     def _kill_port_process(self, port: int):
         """Kill any process currently binding to the specified local port gracefully."""
@@ -354,14 +355,14 @@ class VLLMOrchestrator:
         try:
             # Create remote directory
             subprocess.run(
-                f"ssh {target_host} 'mkdir -p {remote_dir}'", shell=True, check=True
+                f"ssh -q {target_host} 'mkdir -p {remote_dir}'", shell=True, check=True
             )
             # Upload resolved content using scp
             temp_script = Path(f"temp_{script_name}")
             temp_script.write_text(script_content)
             try:
                 subprocess.run(
-                    f"scp {temp_script} {target_host}:{remote_dir}/{script_name}",
+                    f"scp -q {temp_script} {target_host}:{remote_dir}/{script_name}",
                     shell=True,
                     check=True,
                 )
@@ -369,7 +370,7 @@ class VLLMOrchestrator:
                 if temp_script.exists():
                     temp_script.unlink()
             subprocess.run(
-                f"ssh {target_host} 'chmod +x {remote_dir}/{script_name}'",
+                f"ssh -q {target_host} 'chmod +x {remote_dir}/{script_name}'",
                 shell=True,
                 check=True,
             )
@@ -377,8 +378,8 @@ class VLLMOrchestrator:
             # Execute script in that directory with port override
             remote_cmd = f"cd {remote_dir} && PORT={remote_port} bash {script_name}"
             console.print(f"[blue]Starting vLLM server on {target_host}...[/blue]")
-            console.print(f"[dim]Executing: ssh {target_host} '{remote_cmd}'[/dim]")
-            subprocess.run(f"ssh {target_host} '{remote_cmd}'", shell=True, check=True)
+            console.print(f"[dim]Executing: ssh -q {target_host} '{remote_cmd}'[/dim]")
+            subprocess.run(f"ssh -q {target_host} '{remote_cmd}'", shell=True, check=True)
             return True
         except subprocess.CalledProcessError as e:
             console.error(f"DGX launch failed: {e}")
@@ -619,13 +620,13 @@ class VLLMOrchestrator:
             if cache_dir:
                 mkdir_cmd += f" && mkdir -p {cache_dir}"
 
-            subprocess.run(f"ssh uva '{mkdir_cmd}'", shell=True, check=True)
+            subprocess.run(f"ssh -q uva '{mkdir_cmd}'", shell=True, check=True)
             # Upload resolved content using scp
             temp_script = Path(f"temp_{script_name}")
             temp_script.write_text(script_content)
             try:
                 subprocess.run(
-                    f"scp {temp_script} uva:{remote_dir}/{script_name}",
+                    f"scp -q {temp_script} uva:{remote_dir}/{script_name}",
                     shell=True,
                     check=True,
                 )
@@ -633,7 +634,7 @@ class VLLMOrchestrator:
                 if temp_script.exists():
                     temp_script.unlink()
             subprocess.run(
-                f"ssh uva 'chmod +x {remote_dir}/{script_name}'", shell=True, check=True
+                f"ssh -q uva 'chmod +x {remote_dir}/{script_name}'", shell=True, check=True
             )
             console.ok(f"Successfully uploaded {script_name} to {remote_dir}")
 
@@ -650,12 +651,12 @@ class VLLMOrchestrator:
             )
             sbatch_file = f"{remote_dir}/submit.sh"
             subprocess.run(
-                f"ssh uva 'echo \"{sbatch_script}\" > {sbatch_file}'",
+                f"ssh -q uva 'echo \"{sbatch_script}\" > {sbatch_file}'",
                 shell=True,
                 check=True,
             )
 
-            submit_cmd = f"ssh uva 'sbatch {sbatch_file}'"
+            submit_cmd = f"ssh -q uva 'sbatch {sbatch_file}'"
             console.print(f"[dim]Executing: {submit_cmd}[/dim]")
             result = subprocess.run(
                 submit_cmd, shell=True, capture_output=True, text=True, check=True
@@ -787,10 +788,6 @@ class VLLMOrchestrator:
         # Use port_override if provided, otherwise fallback to identity port
         self.server_config["remote_port"] = port_override or identity["port"]
 
-        # Update job_name to reflect the port if an override is provided
-        if port_override:
-            self.server_config["name"] = self.get_job_name(self.server_config, port_override)
-
         # Pre-calculate remote_dir so it can be expanded in the final pass
         # Default to a common pattern if not specified in config
         if "dir" not in self.server_config:
@@ -847,13 +844,29 @@ class VLLMOrchestrator:
             if not changed:
                 break
 
-        # Special case: Expand $USER using the 'user' from the config if present.
-        # This is done after {key} expansion to ensure 'user' is fully resolved.
-        user_val = config_data.get("user")
-        if user_val:
-            for key, value in config_data.items():
-                if isinstance(value, str) and "$USER" in value:
-                    config_data[key] = value.replace("$USER", str(user_val))
+        # Final pass to resolve any remaining external references {~path:key}
+        # that may have been introduced during placeholder expansion.
+        for key, value in config_data.items():
+            if isinstance(value, str) and "{" in value and "}" in value:
+                pattern = r"\{([^}]+)\}"
+                def replace_ext(match):
+                    ref = match.group(1)
+                    if ":" in ref and (ref.startswith("~") or "/" in ref):
+                        resolved = self.config._resolve_external_reference(ref)
+                        # If resolution fails (returns {ref}), and it looks like a user lookup,
+                        # use $USER to let the remote shell handle it.
+                        if resolved == f"{{{ref}}}" and "user" in ref.lower():
+                            return "$USER"
+                        return resolved
+                    return f"{{{ref}}}"
+                config_data[key] = re.sub(pattern, replace_ext, value)
+
+        # Update job_name to reflect the port if an override is provided.
+        # This must happen after all {key} placeholders are expanded to avoid duplication.
+        if port_override:
+            # Use a temporary DotDict to leverage get_job_name logic
+            tmp_cfg = DotDict(config_data)
+            config_data["name"] = self.get_job_name(tmp_cfg, port_override)
 
         # 2. Handle port override for hardcoded --port flags in scripts
         if port_override:
