@@ -201,7 +201,7 @@ class VLLMOrchestrator:
             #SBATCH --partition=bii-gpu
             #SBATCH --reservation=bi_fox_dgx
             #SBATCH --account=bi_dsc_community
-            #SBATCH --gpus=a100:{gpus}
+            #SBATCH --gres=gpu:a100:{gpus}
             #SBATCH --cpus-per-task=32
             #SBATCH --mem={mem}
             #SBATCH --time=03:00:00
@@ -222,6 +222,59 @@ class VLLMOrchestrator:
         # Remove any existing port suffix (_digits) to prevent duplication
         base_name = re.sub(r"_\d+$", "", name)
         return f"{base_name}_{port}"
+
+    def resolve_job_by_port(self, port: int):
+        """Dynamically resolve Slurm Job ID and Node Name using the port."""
+        try:
+            sq = SQueue()
+            jobs = sq.get_jobs()
+            if not jobs:
+                return None
+
+            # 1. Try to guess the job name using config (e.g., vllm_server_18222)
+            target_job_name = self.get_job_name(self.config, port)
+            port_suffix = f"_{port}"
+            
+            for job in jobs:
+                jname = job.get("name", "")
+                # Match if it's the exact guessed name, or contains it, 
+                # or if it's a vLLM job that ends with the port suffix (e.g., vllm_gemma_18222)
+                if (jname == target_job_name or 
+                    target_job_name in jname or 
+                    (jname.startswith("vllm") and jname.endswith(port_suffix))):
+                    
+                    job_id = job.get("job_id")
+                    nodes = job.get("nodes", [])
+                    node_name = "Unknown"
+                    if nodes and isinstance(nodes, list) and isinstance(nodes[0], dict):
+                        node_name = nodes[0].get("name", "Unknown")
+                        if node_name != "Unknown" and "," in node_name:
+                            node_name = node_name.split(",")[0]
+                    
+                    return {"job_id": job_id, "node_name": node_name}
+        except Exception as e:
+            self.log_debug(f"Error resolving job by port {port}: {e}")
+        
+        return None
+
+    def resolve_port_by_job_id(self, job_id):
+        """Dynamically resolve the port from the Slurm job name."""
+        try:
+            sq = SQueue()
+            jobs = sq.get_jobs()
+            if not jobs:
+                return None
+            
+            for job in jobs:
+                if str(job.get("job_id")) == str(job_id):
+                    jname = job.get("name", "")
+                    # Look for trailing _digits as the port
+                    match = re.search(r"_(\d+)$", jname)
+                    if match:
+                        return int(match.group(1))
+        except Exception as e:
+            self.log_debug(f"Error resolving port for job {job_id}: {e}")
+        return None
 
     def _kill_port_process(self, port: int):
         """Kill any process currently binding to the specified local port gracefully."""
@@ -685,15 +738,40 @@ class VLLMOrchestrator:
 
             # Poll squeue to find the allocated node
             node_name = None
+            sq = SQueue(host="uva")
+            console.print(f"[dim]Polling squeue for Job ID: {job_id}...[/dim]")
             for i in range(60):  # Wait up to 5 minutes
-                check_node_cmd = f"ssh uva 'squeue -j {job_id} -h -o %N'"
-                node_res = subprocess.run(
-                    check_node_cmd, shell=True, capture_output=True, text=True
-                )
-                node_out = node_res.stdout.strip()
-                if node_out and node_out != "NLIST":
-                    # node_out might be "udc-an26-1" or "udc-an26-1,udc-an26-2"
-                    node_name = node_out.split(",")[0]
+                jobs = sq.get_jobs()
+                if not isinstance(jobs, list):
+                    self.log_debug(f"SQueue.get_jobs returned non-list: {type(jobs)}")
+                    time.sleep(5)
+                    continue
+                
+                if i % 5 == 0:
+                    console.print(f"[dim]SQueue check {i+1}/60: Found {len(jobs)} jobs...[/dim]", end="\r")
+                    if len(jobs) > 0 and i == 0:
+                        self.log_debug(f"Sample job from SQueue: {jobs[0]}")
+                    elif len(jobs) == 0:
+                        self.log_debug("SQueue returned no jobs.")
+                    
+                for job in jobs:
+                    if not isinstance(job, dict):
+                        continue
+                    
+                    # Cast both to string to avoid type mismatch (int vs str)
+                    if str(job.get("job_id")) == str(job_id):
+                        nodes = job.get("nodes", [])
+                        if isinstance(nodes, list) and nodes and isinstance(nodes[0], dict):
+                            node_name = nodes[0].get("name")
+                            if node_name and node_name != "Unknown":
+                                node_name = node_name.split(",")[0]
+                                break
+                
+                if i == 59 and not node_name:
+                    # Final attempt: log what was actually found to help diagnosis
+                    found_ids = [str(j.get("job_id")) for j in jobs if isinstance(j, dict)]
+                    console.error(f"Job {job_id} not found in SQueue after 60 attempts. Found IDs: {found_ids}")
+                if node_name:
                     break
                 time.sleep(5)
 
@@ -950,6 +1028,19 @@ class VLLMOrchestrator:
             StopWatch.benchmark()
             return True
 
+        # If not alive locally, try to establish tunnel first in case it's alive remotely
+        if target_host not in ["localhost", "127.0.0.1"]:
+            from cloudmesh.ai.vllm.tunnel import tunnel_manager
+            console.print(f"[blue]Attempting to establish tunnel to {target_host}:{self.server_config['remote_port']}...[/blue]")
+            success, msg = tunnel_manager.start_tunnel(target_host, self.server_config['remote_port'])
+            if success or msg == "Tunnel already active":
+                # Re-check health after tunneling
+                if client.is_alive():
+                    console.ok("vLLM server is now ALIVE via tunnel!")
+                    StopWatch.stop("vllm_startup")
+                    StopWatch.benchmark()
+                    return True
+
         # 2. Platform-specific Launch
         with StopWatch.timer("platform_launch"):
             console.banner("Platform Launch")
@@ -1051,24 +1142,24 @@ class VLLMOrchestrator:
 
             for i in range(COUNT):
                 # 1. Stream any available logs from the vLLM process and check for success
-                # if process:
-                #    try:
-                #        while True:
-                #            line = process.stdout.readline()
-                #            if not line:
-                #                break
-                #            # print(line, end="")
-                #            # Real-time detection: check if the success message is in the streamed line
-                #            if any(
-                #                pattern in line
-                #                for pattern in [
-                #                    "vLLM is up and running on 0.0.0.0",
-                #                    "Application startup complete",
-                #                ]
-                #            ):
-                #                app_ready = True
-                #    except Exception:
-                #        pass
+                if process:
+                    try:
+                        while True:
+                            line = process.stdout.readline()
+                            if not line:
+                                break
+                            console.print(line, end="")
+                            # Real-time detection: check if the success message is in the streamed line
+                            if any(
+                                pattern in line
+                                for pattern in [
+                                    "vLLM is up and running on 0.0.0.0",
+                                    "Application startup complete",
+                                ]
+                            ):
+                                app_ready = True
+                    except Exception:
+                        pass
 
                 # 2. Check if port is open AND application startup is complete in logs.
                 # We run the check via the login node to avoid direct SSH authentication issues.
@@ -1113,7 +1204,11 @@ class VLLMOrchestrator:
                     debug_msg = f"[dim]Debug: port_open={port_open}, app_ready={app_ready} (Response: {health_res.stdout.strip()[:50]})[/dim]"
                     console.print(debug_msg)
 
-                if port_open and app_ready:
+                # If logs confirm the app is ready, we can proceed even if the login-node-to-compute-node 
+                # port check (nc) fails, as the SSH tunnel often works where direct nc doesn't.
+                if app_ready:
+                    if not port_open:
+                        console.warning(f"Port {remote_port} on {node_name} not reachable via nc from login node, but logs indicate app is ready. Proceeding with tunnel...")
                     success = True
                     break
 

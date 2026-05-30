@@ -46,17 +46,19 @@ def llm_group():
 
 
 @launch_group.command(name="webui")
-def launch_webui():
+@click.option("--port", type=int, help="Override the backend port")
+def launch_webui(port):
     """Launch the Open WebUI container."""
     launcher = WebUILauncher()
-    launcher.launch()
+    launcher.launch(port=port)
 
 
 @launch_group.command(name="claude")
-def launch_claude():
+@click.option("--port", type=int, help="Override the backend port")
+def launch_claude(port):
     """Launch Claude Code with vLLM backend."""
     launcher = ClaudeLauncher()
-    launcher.launch()
+    launcher.launch(port=port)
 
 
 @launch_group.command(name="aider")

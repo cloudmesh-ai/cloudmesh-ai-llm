@@ -46,7 +46,7 @@ class TunnelManager:
         if self.is_tunnel_active(host, port):
             return False, "Tunnel already active"
 
-        tunnel_cmd = ["ssh", "-L", f"{port}:localhost:{port}", host, "-N"]
+        tunnel_cmd = ["ssh", "-L", f"{port}:127.0.0.1:{port}", host, "-N"]
         try:
             process = subprocess.Popen(
                 tunnel_cmd, 

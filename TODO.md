@@ -35,3 +35,58 @@
   - [x] **Orchestration Logic**: Mock-based tests for `VLLMOrchestrator.prepare_backend` pipeline.
   - [x] **Client Operations**: Test `get_logs` and `stream_logs` error handling.
   - [x] **Launcher Config**: Verify config resolution in `WebUILauncher`, `AiderLauncher`, and `ClaudeLauncher`.
+
+## Documentation Overhaul (Proposed MkDocs Outline)
+
+Transform the documentation into a comprehensive User Manual focusing on practical deployment and usage.
+
+### 1. User Manual: Starting AI Services
+
+*Goal: Guide users from zero to a running model on specific hardware.*
+
+- **Getting Started with vLLM Services**
+  - Overview of the `cmc llm start` command.
+  - Step-by-step guide to starting `uva.gemma` and `uva.gemma2`.
+- **Hardware-Specific Deployment**
+  - **RTX 3090**: Optimization tips and specific start commands for consumer GPUs.
+  - **NVIDIA Spark**: Configuration and launch process for Spark-based clusters.
+- **Validation & Testing**
+  - **Quick Testing with Curl**:
+    - Sample `curl` command to verify the `/v1/models` endpoint.
+    - Sample `curl` command to send a completion request to the active model.
+  - **Using Built-in Tests**:
+    - How to run the `ai-llm` test suite to verify backend connectivity and health.
+
+### 2. The Proxy Service
+
+*Goal: Explain how to centralize and manage multiple AI backends.*
+
+- **Introduction to the Proxy Service**
+  - What is the proxy service and why use it?
+  - Architecture: Client -\> Proxy -\> vLLM Backend.
+- **Using Backends via Proxy**
+  - Configuring the proxy to route requests to different models.
+  - Step-by-step: Using the proxy to access `uva.gemma`.
+- **Accessing Special Models**
+  - Detailed guide on using `uva kimmi` via the proxy service.
+
+### 3. Client Tooling & Integration
+
+*Goal: Show how to connect external AI tools to the Cloudmesh AI infrastructure.*
+
+- **Client Ecosystem Overview**
+  - List of supported tools (Cline, Aider, Open WebUI, etc.).
+- **Deep Dive: Cline Setup**
+  - **Command Line Setup**: How to configure Cline via the CLI.
+  - **Model Selection**: Selecting a specific local model vs. using the proxy service.
+  - **Configuration**: Setting the base URL and API keys for seamless integration.
+
+### 4. API Sample Programs
+
+*Goal: Provide copy-pasteable code for developers.*
+
+- **Python Client Examples**
+  - Simple chat completion using the `openai` Python library.
+  - Streaming responses example.
+- **Advanced Integration**
+  - Handling timeouts and retries when connecting to remote vLLM instances.

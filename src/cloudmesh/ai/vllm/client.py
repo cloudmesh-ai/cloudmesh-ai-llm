@@ -5,7 +5,7 @@ from cloudmesh.ai.common.io import console
 
 class VLLMClient:
     """Client to interact with a running vLLM server."""
-    def __init__(self, config, server_name=None, debug: bool = False):
+    def __init__(self, config, server_name=None, port=None, host=None, debug: bool = False):
         self.config = config
         self.debug = debug
         
@@ -18,6 +18,16 @@ class VLLMClient:
             self.host = config.get("host")
             self.port = config.get("port")
             self.user = config.get("user")
+
+        # Overrides for dynamic port/host (e.g. from --port flag)
+        if host:
+            self.host = host
+        if port:
+            self.port = port
+        
+        # Default to localhost if we have a port but no host
+        if self.port and not self.host:
+            self.host = "localhost"
 
         self.api_url = f"http://{self.host}:{self.port}/health"
 
@@ -39,17 +49,20 @@ class VLLMClient:
         Check the vLLM server status.
         Returns: 'OFFLINE', 'STARTING', or 'READY'.
         """
+        api_key = self.config.get("ai.llm.vllm_api_key") or self.config.get("VLLM_API_KEY")
+        headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
+
         try:
             # 1. Check basic health endpoint
             self._log_request("GET", self.api_url)
-            response = requests.get(self.api_url, timeout=5)
+            response = requests.get(self.api_url, headers=headers, timeout=5)
             if response.status_code != 200:
                 return "STARTING"
             
             # 2. Verify that the model API is responsive
             models_url = f"http://{self.host}:{self.port}/v1/models"
             self._log_request("GET", models_url)
-            models_response = requests.get(models_url, timeout=5)
+            models_response = requests.get(models_url, headers=headers, timeout=5)
             if models_response.status_code == 200:
                 return "READY"
             
@@ -62,6 +75,26 @@ class VLLMClient:
     def is_alive(self):
         """Backward compatibility: check if the server is READY."""
         return self.get_status() == "READY"
+
+    def get_models(self):
+        """
+        Retrieve the list of models available on the vLLM server.
+        Returns: A list of model dictionaries.
+        """
+        api_key = self.config.get("ai.llm.vllm_api_key") or self.config.get("VLLM_API_KEY")
+        headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
+
+        try:
+            models_url = f"http://{self.host}:{self.port}/v1/models"
+            self._log_request("GET", models_url)
+            response = requests.get(models_url, headers=headers, timeout=5)
+            if response.status_code == 200:
+                data = response.json()
+                return data.get("data", [])
+            return []
+        except Exception as e:
+            console.print(f"[dim]Error retrieving models: {e}[/dim]")
+            return []
 
     def get_logs(self, lines=100, grep=None):
         """Retrieve the last N lines of logs from the remote server, optionally filtered by grep."""
@@ -111,6 +144,48 @@ class VLLMClient:
             bufsize=1 # Line buffered
         )
         return process
+
+    def get_metrics(self):
+        """
+        Retrieve Prometheus metrics from the vLLM server.
+        Returns a dictionary of parsed vLLM metrics.
+        """
+        api_key = self.config.get("ai.llm.vllm_api_key") or self.config.get("VLLM_API_KEY")
+        headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
+
+        try:
+            metrics_url = f"http://{self.host}:{self.port}/metrics"
+            self._log_request("GET", metrics_url)
+            response = requests.get(metrics_url, headers=headers, timeout=5)
+            if response.status_code != 200:
+                return {}
+
+            metrics = {}
+            for line in response.text.splitlines():
+                # Ignore comments and empty lines
+                if line.startswith("#") or not line.strip():
+                    continue
+                
+                # Prometheus format: metric_name{labels} value
+                parts = line.split()
+                if len(parts) < 2:
+                    continue
+                
+                name_part = parts[0]
+                value = parts[1]
+                
+                # Strip labels for simple lookup
+                name = name_part.split('{')[0]
+                
+                try:
+                    metrics[name] = float(value)
+                except ValueError:
+                    continue
+            
+            return metrics
+        except Exception as e:
+            console.print(f"[dim]Error retrieving metrics: {e}[/dim]")
+            return {}
 
     def __repr__(self):
         return f"VLLMClient(host={self.host}, port={self.port})"

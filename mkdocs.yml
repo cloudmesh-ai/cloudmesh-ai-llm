@@ -3,19 +3,19 @@ extra_css:
 - css/custom.css
 nav:
 - Home: index.md
-- Documents:
-  - README: index.md
-  - UVA: uva.md
-  - Environment: ENVIRONMENT.md
-  - Cline: cline.md
-  - Continue: continue.md
-  - Allocation: allocation.md
-  - api: api.md
+- User Manual:
+  - Installation: installation.md
+  - Starting AI Services: user-manual/starting-services.md
+- Proxy Service:
+  - Introduction: proxy-service/introduction.md
+- Client Tooling:
+  - Overview: client-tools/overview.md
+- API Examples:
+  - Python Samples: api-samples/python-examples.md
 - Project:
   - Changelog: CHANGELOG.md
   - GitHub: https://github.com/cloudmesh-ai/cloudmesh-ai-llm
   - Issues: https://github.com/cloudmesh-ai/cloudmesh-ai-llm/issues
-- API Reference: api.md
 plugins:
 - cloudmesh-ai-theme
 - search

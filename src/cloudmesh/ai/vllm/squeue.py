@@ -8,50 +8,72 @@ class SQueue:
         self.host = host
 
     def get_jobs(self):
-        """Retrieve running jobs, attempting JSON first then falling back to text."""
+        """Retrieve running jobs for the current user, prioritizing the fast text format."""
+        # We prioritize text format because JSON is often slow or missing on Slurm clusters
         try:
-            # 1. Try JSON
-            cmd = f"ssh {self.host} 'squeue --json'"
-            result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
-            
-            if result.returncode == 0:
-                return json.loads(result.stdout)
-            
-            if "serializer_required" in result.stderr or "could not find plugin" in result.stderr:
-                # Fallback to text parsing
-                return self._get_jobs_text()
-            
-            # Other errors
-            return []
+            text_jobs = self._get_jobs_text()
+            if text_jobs:
+                return text_jobs
         except Exception:
-            return self._get_jobs_text()
+            pass
+
+        try:
+            # Try JSON as a fallback (though it's usually slower)
+            cmd = f"ssh {self.host} 'squeue --me --json'"
+            result = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=10)
+            if result and result.returncode == 0:
+                data = json.loads(result.stdout)
+                jobs_list = data.get("jobs", [])
+                normalized_jobs = []
+                for job in jobs_list:
+                    resources = job.get("job_resources", {})
+                    nodes_data = resources.get("nodes", {})
+                    allocation = nodes_data.get("allocation", [])
+                    normalized_job = job.copy()
+                    normalized_job["nodes"] = allocation
+                    normalized_jobs.append(normalized_job)
+                return normalized_jobs
+        except Exception:
+            pass
+        
+        return []
 
     def _get_jobs_text(self):
-        """Fallback: Use pipe-separated format to avoid quoting issues over SSH."""
+        """Fastest method: Use the user-recommended squeue format for high performance."""
         try:
-            # Use a simple pipe-separated format: job_id|job_name|state|node_list
-            fmt = '%i|%j|%T|%N'
-            cmd = f"ssh {self.host} 'squeue --noheader --format=\"{fmt}\"'"
-            result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+            # User recommended fast command: squeue -a -u "$USER" -o "%.18i %.9P %.30j %.8u %.2t %.10M %.6D %R"
+            # Use -u $USER instead of --me for maximum compatibility across Slurm versions
+            fmt = '%.18i %.9P %.30j %.8u %.2t %.10M %.6D %R'
+            cmd = f"ssh {self.host} 'squeue --noheader -u $USER -o \"{fmt}\"'"
             
+            result = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=30)
             if result.returncode != 0:
                 return []
-
+ 
             jobs = []
             for line in result.stdout.splitlines():
                 line = line.strip()
                 if not line:
                     continue
                 
-                parts = line.split('|')
-                if len(parts) < 4:
+                # Split by whitespace
+                parts = line.split()
+                if len(parts) < 5:
                     continue
                 
+                # Mapping based on format:
+                # %i (0): JobID, %P (1): Partition, %j (2): Name, %u (3): User, %t (4): State, %M (5): Time, %D (6): Nodes, %R (7): NodeList
+                job_id = parts[0]
+                name = parts[2]
+                state = parts[4]
+                # NodeList is the last part if it exists
+                node_list = parts[7] if len(parts) > 7 else "Unknown"
+                
                 jobs.append({
-                    "job_id": parts[0],
-                    "name": parts[1],
-                    "state": parts[2],
-                    "nodes": [{"name": parts[3] if parts[3] else "Unknown"}]
+                    "job_id": job_id,
+                    "name": name,
+                    "state": state,
+                    "nodes": [{"name": node_list if node_list else "Unknown"}]
                 })
             return jobs
         except Exception:

@@ -200,13 +200,35 @@ class WebUILauncher:
                 actual_port = self.local_tunnel_port
 
             model_info = f"Model: {default_model}" if default_model else "Model: Not specified"
+            
+            # Try to generate a Grafana monitoring link if on UVA
+            monitor_link = None
+            try:
+                from cloudmesh.ai.vllm.orchestrator import VLLMOrchestrator
+                orch = VLLMOrchestrator()
+                # Find the server associated with this launch
+                default_server = orch.config.get("cloudmesh.ai.default.server")
+                if default_server:
+                    state = orch._load_state()
+                    server_state = state.get(default_server)
+                    if server_state and "job_id" in server_state:
+                        jid = server_state.get("job_id")
+                        node = server_state.get("node_name")
+                        monitor_link = f"https://grafana.pods.uvarc.io/d/HRLkiLS7k/single-job-stats-input-jobid?orgId=1&theme=light&from=now-3h&to=now&var-node={node}&var-JobID={jid}"
+            except Exception:
+                pass
+
             success_msg = (
                 f"Setup Complete!\n"
                 f"1. SSH tunnel and backend verified (localhost:{actual_port} -> server).\n"
                 f"2. {model_info}\n"
                 f"3. Access the UI at: http://localhost:{self.webui_port}\n"
-                f"4. Opening the UI in your default browser in a few seconds..."
             )
+            if monitor_link:
+                success_msg += f"4. Monitor job on Grafana: {monitor_link}\n"
+            
+            success_msg += f"5. Opening the UI in your default browser in a few seconds..."
+            
             console.print(banner("Success", success_msg))
             
             # Wait for the application to be fully ready before opening the browser

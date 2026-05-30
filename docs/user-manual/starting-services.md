@@ -111,3 +111,12 @@ The `ai-llm` package includes a test suite that can verify the connectivity and 
 # Run connectivity tests for the current configuration
 export PYTHONPATH=$PYTHONPATH:$(pwd)/src
 python -m pytest tests/test_vllm.py
+```
+
+---
+
+## Next Steps: Monitoring Your Service
+
+Once your model is running and validated, you should monitor its resource usage and API health to ensure stability. 
+
+For detailed instructions on using Grafana dashboards, checking service status, and streaming logs, please refer to the [Monitoring Guide](monitoring.md).
