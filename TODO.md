@@ -36,57 +36,79 @@
   - [x] **Client Operations**: Test `get_logs` and `stream_logs` error handling.
   - [x] **Launcher Config**: Verify config resolution in `WebUILauncher`, `AiderLauncher`, and `ClaudeLauncher`.
 
-## Documentation Overhaul (Proposed MkDocs Outline)
+## 🚀 Future Roadmap (Proposed Improvements)
+
+### User Experience (UX) Polishing
+
+- [ ] **Interactive Configuration**: Implement a guided interactive wizard for initial setup of `llm.yaml`.
+  - The `cmc llm configure` command is basic; a wizard would help users set up their first server without needing to look at the YAML schema.
+- [x] **Better Status Visualization**: Enhance `cmc llm status` with `rich` tables showing real-time health and allocated nodes.
+  - Show real-time health, tunnel status, and the allocated node at a glance.
+- [ ] **Wait-for-Ready Indicators**: Add visual spinners/progress bars while polling for model loading.
+  - Make the wait feel shorter and more informative during the model loading phase.
+
+### Robustness & Reliability
+
+- [ ] **Automatic Tunnel Recovery**: Background "keep-alive" check to detect and restart dropped tunnels automatically.
+  - Implement a check that detects if a tunnel has dropped and restarts it without requiring the user to run `cmc llm start` again.
+- [ ] **Graceful Shutdown**: Explicitly close local SSH tunnels and clean up remote temporary files during `cmc llm stop`.
+  - Ensure `cmc llm stop` kills the remote process, closes the local SSH tunnel, and cleans up temporary files on the remote node.
+- [ ] **Comprehensive Integration Tests**: Expand `tests/` to include end-to-end tests for `monitor stack` (Docker container and API verification).
+  - Verify that Docker containers are actually created and the Grafana/Prometheus APIs are reachable.
+
+### Advanced Feature Expansion
+
+- [ ] **Multi-Model Orchestration**: Support for managing multiple concurrent servers with quick context switching.
+  - Allow the tool to manage multiple running servers simultaneously and provide a way to "switch" the default server context quickly.
+- [ ] **Batch Job Integration**: Implement `cmc llm batch` for non-interactive inference using `batch_job.py`.
+  - Fully integrate `batch_job.py` into the CLI for non-interactive inference tasks.
+- [ ] **Custom Dashboard Templates**: Allow users to specify custom Grafana JSON files for monitoring.
+  - Enable users to specify their own Grafana JSON files instead of relying solely on the built-in `vllm.json`.
+
+### Documentation "Final Mile"
+
+- [x] **Visual Architecture**: Add Mermaid.js diagrams to `docs/ENVIRONMENT.md` to visualize the tunnel and observability flow.
+  - Create visual diagrams to explain the flow: `Remote GPU Node` $\rightarrow$ `SSH Tunnel` $\rightarrow$ `Localhost` $\rightarrow$ `Prometheus` $\rightarrow$ `Grafana`.
+- [ ] **Expanded API Examples**: Add diverse Python/Node.js implementation examples in `docs/api-samples/`.
+  - Show how to use the orchestrator's backends in real-world applications with multiple language examples.
+
+## Documentation UX Polish
+
+Align documentation with recent UI/UX enhancements to ensure users can leverage new visual features.
+
+- [x] **Update `monitoring.md`**: Document the new Rich Summary Table for `cmc llm status`, including color-coded health and allocated node info.
+- [x] **Update `starting-services.md`**: Document the new visual loading indicators (spinners/progress) and update the validation workflow to prioritize `cmc llm status`.
+
+## Documentation Overhaul (Completed)
 
 Transform the documentation into a comprehensive User Manual focusing on practical deployment and usage.
 
 ### 1. User Manual: Starting AI Services
 
-*Goal: Guide users from zero to a running model on specific hardware.*
-
-- **Getting Started with vLLM Services**
-  - Overview of the `cmc llm start` command.
-  - Step-by-step guide to starting `uva.gemma` and `uva.gemma2`.
-- **Hardware-Specific Deployment**
-  - **RTX 3090**: Optimization tips and specific start commands for consumer GPUs.
-  - **NVIDIA Spark**: Configuration and launch process for Spark-based clusters.
-- **Validation & Testing**
-  - **Quick Testing with Curl**:
-    - Sample `curl` command to verify the `/v1/models` endpoint.
-    - Sample `curl` command to send a completion request to the active model.
-  - **Using Built-in Tests**:
-    - How to run the `ai-llm` test suite to verify backend connectivity and health.
+- [x] Overview of the `cmc llm start` command.
+- [x] Guide to starting `uva.gemma` and `uva.gemma2`.
+- [x] Hardware-Specific Deployment (RTX 3090, NVIDIA Spark).
+- [x] Validation & Testing (Curl and Built-in tests).
+- [x] Integration of `cmc llm template` command.
 
 ### 2. The Proxy Service
 
-*Goal: Explain how to centralize and manage multiple AI backends.*
-
-- **Introduction to the Proxy Service**
-  - What is the proxy service and why use it?
-  - Architecture: Client -\> Proxy -\> vLLM Backend.
-- **Using Backends via Proxy**
-  - Configuring the proxy to route requests to different models.
-  - Step-by-step: Using the proxy to access `uva.gemma`.
-- **Accessing Special Models**
-  - Detailed guide on using `uva kimmi` via the proxy service.
+- [x] Introduction to the Proxy Service and architecture.
+- [x] Using backends via Proxy.
+- [x] Guide on accessing special models (e.g., `uva kimmi`).
 
 ### 3. Client Tooling & Integration
 
-*Goal: Show how to connect external AI tools to the Cloudmesh AI infrastructure.*
-
-- **Client Ecosystem Overview**
-  - List of supported tools (Cline, Aider, Open WebUI, etc.).
-- **Deep Dive: Cline Setup**
-  - **Command Line Setup**: How to configure Cline via the CLI.
-  - **Model Selection**: Selecting a specific local model vs. using the proxy service.
-  - **Configuration**: Setting the base URL and API keys for seamless integration.
+- [x] Client Ecosystem Overview.
+- [x] Deep Dive: Cline Setup (CLI, Model Selection, Configuration).
 
 ### 4. API Sample Programs
 
-*Goal: Provide copy-pasteable code for developers.*
+- [x] Python Client Examples (Chat completion, Streaming).
+- [x] Advanced Integration (Timeouts, Retries).
 
-- **Python Client Examples**
-  - Simple chat completion using the `openai` Python library.
-  - Streaming responses example.
-- **Advanced Integration**
-  - Handling timeouts and retries when connecting to remote vLLM instances.
+### 5. Observability & Support (Added)
+
+- [x] Full Observability Stack guide (`monitor stack`).
+- [x] Comprehensive Troubleshooting Guide.
+- [x] vLLM Engine Metrics API reference.

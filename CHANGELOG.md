@@ -4,11 +4,14 @@ All notable changes to `cloudmesh-ai-llm` will be documented in this file.
 
 ## [Unreleased]
 ### Added
+- **Automated Monitoring Stack**: Enhanced `cmc llm monitor stack` with zero-config provisioning of Prometheus and Grafana, including automatic port discovery and vLLM dashboard setup.
+- **Observability Diagnostics**: Added automated verification of dashboard loading via the Grafana API during stack launch.
 - **Configuration Templates**: Added `cmc llm template` command and pre-defined templates (Gemma, Llama) to simplify initial configuration setup.
 - **Specialized Client Launcher**: Added `cmc llm launch <client>` (e.g., `cmc llm launch aider`) to provide a unified way to launch LLM clients.
 - **Automatic VPN Connection**: Integrated VPN check and connection directly into the `cmc llm start` pipeline.
 
 ### Changed
+- **Monitoring Workflow**: Simplified the observability setup by removing manual data source and dashboard import steps in favor of automated provisioning.
 - **Command Consolidation**: Removed the redundant `cmc gemma` command group and consolidated all functionality into `cmc llm`.
 - **UVA HPC Orchestration**: Replaced `ijob` based allocation with a simplified Slurm script submission process.
 - **Configuration Relocation**: Moved vLLM server configurations to a dedicated `config/` directory for better project organization.

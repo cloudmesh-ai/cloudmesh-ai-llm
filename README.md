@@ -13,6 +13,7 @@ For the full interactive documentation, please visit: <https://cloudmesh-ai.gith
 - **Local Export & Customization**: Export launch scripts locally, modify them, and the orchestrator will use your customized versions.
 - **Performance Monitoring**: Integrated benchmarking to measure the duration of each startup phase (VPN, Allocation, Model Loading).
 - **Observability**: Global `--debug` mode to expose raw SSH commands and API requests for easier troubleshooting.
+- **Automated Observability Stack**: One-command launch of Prometheus and Grafana with zero-config provisioning of vLLM dashboards.
 - **Robust Process Management**: Automatic tracking and cleanup of background processes (tunnels and log streams) to prevent resource leaks.
 - **Configuration Templates**: Quickly set up common models (e.g., Gemma, Llama) using pre-defined templates.
 
@@ -171,6 +172,17 @@ When you run `cmc llm start gemma-dgx`:
 
 3\. **Health Check**: Polls the API until the model is fully loaded.
 
+### Full Observability Stack
+
+For professional-grade monitoring, you can launch a local observability stack that scrapes metrics directly from your vLLM server.
+
+``` bash
+# Launch automated Prometheus & Grafana stack
+cmc llm monitor stack
+```
+
+The orchestrator handles everything: it autodiscovers the vLLM port, provisions the Prometheus data source, and deploys the "vLLM Server Metrics" dashboard.
+
 ### Configuration Templates
 
 To avoid manual YAML editing, you can apply standard templates for popular models:
@@ -237,6 +249,8 @@ cmc llm start gemma-uva
 | `cmc llm logs <name> [--follow] [--grep <keyword>]` | Retrieve or stream server logs, with optional keyword filtering. |
 | `cmc llm default server <name>` | Sets the default server for the `llm` group. |
 | `cmc llm template [name]` | List available templates or apply a specific one (e.g., `gemma`, `llama`) to the config. |
+| `cmc llm monitor stack` | Launch automated Prometheus & Grafana observability stack. |
+| `cmc llm monitor stop-stack` | Stop and remove the observability stack. |
 | `cmc llm configure` | Interactively configure vLLM settings. |
 | `cmc llm --debug <command>` | Global flag to print raw SSH/API commands for any `llm` subcommand. |
 

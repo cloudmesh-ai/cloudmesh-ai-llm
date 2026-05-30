@@ -43,7 +43,7 @@ def mock_db():
 
 def test_launch_success(runner, mock_creds, mock_db):
     """Test successful launch command construction."""
-    with patch("cloudmesh.ai.command.vllm.VLLMOrchestrator.prepare_backend", return_value=True):
+    with patch("cloudmesh.ai.vllm.orchestrator.VLLMOrchestrator.prepare_backend", return_value=True):
         result = runner.invoke(llm_group, ["start", "2"], input="\n")
         
         assert result.exit_code == 0
@@ -51,7 +51,7 @@ def test_launch_success(runner, mock_creds, mock_db):
 
 def test_launch_custom_device(runner, mock_creds, mock_db):
     """Test launch with explicit device IDs."""
-    with patch("cloudmesh.ai.command.vllm.VLLMOrchestrator.prepare_backend", return_value=True):
+    with patch("cloudmesh.ai.vllm.orchestrator.VLLMOrchestrator.prepare_backend", return_value=True):
         result = runner.invoke(llm_group, ["start", "test-server", "--device", "4,5,6,7"], input="\n")
         
         assert result.exit_code == 0
@@ -60,7 +60,7 @@ def test_launch_custom_device(runner, mock_creds, mock_db):
 def test_launch_dryrun(runner, mock_creds, mock_db):
     """Test dryrun option prints command without executing."""
     # For dryrun, we need to mock the orchestrator and ensure it doesn't fail
-    with patch("cloudmesh.ai.command.vllm.VLLMOrchestrator") as mock_orch:
+    with patch("cloudmesh.ai.vllm.orchestrator.VLLMOrchestrator") as mock_orch:
         # Mock the config object
         mock_orch.return_value.config = MagicMock()
         mock_orch.return_value.config.resolve_server_identity.return_value = {"host": "host", "port": 8000}
@@ -72,15 +72,15 @@ def test_launch_dryrun(runner, mock_creds, mock_db):
         # if orchestrator.prepare_backend(name, port_override=port):
         # If we mock prepare_backend, we can simulate success.
         
-        with patch("cloudmesh.ai.command.vllm.VLLMOrchestrator.prepare_backend", return_value=True):
+        with patch("cloudmesh.ai.vllm.orchestrator.VLLMOrchestrator.prepare_backend", return_value=True):
             result = runner.invoke(llm_group, ["start", "test-server", "--dryrun"])
             assert result.exit_code == 0
 
 def test_launch_ui(runner, mock_creds, mock_db):
     """Test launch with UI enabled."""
-    with patch("cloudmesh.ai.command.vllm.select_vllm_service", return_value=("test-server", None, "test-host")), \
-         patch("cloudmesh.ai.command.vllm.VLLMOrchestrator.prepare_backend", return_value=True), \
-         patch("cloudmesh.ai.vllm.webui_launcher.WebUILauncher.launch") as mock_launch:
+    with patch("cloudmesh.ai.command.vllm.ui.select_vllm_service", return_value=("test-server", None, "test-host")), \
+          patch("cloudmesh.ai.vllm.orchestrator.VLLMOrchestrator.prepare_backend", return_value=True), \
+          patch("cloudmesh.ai.vllm.webui_launcher.WebUILauncher.launch") as mock_launch:
         
         result = runner.invoke(llm_group, ["start", "test-server", "--ui"], input="\n")
         
