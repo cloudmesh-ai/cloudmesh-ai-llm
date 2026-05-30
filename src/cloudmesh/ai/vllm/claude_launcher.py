@@ -16,11 +16,50 @@ class ClaudeLauncher:
         """Return the model name as is for vLLM backends."""
         return model
 
-    def launch(self, client_config=None):
+    def launch(self, client_config=None, port=None):
         """Launch the claude CLI with required environment variables."""
-        console.error("Claude Code integration is currently not supported.")
-        console.print("\nAlternatives:\n- Use Aider: 'cmc llm launch aider'\n- Use Cline in VS Code")
-        return
+        from cloudmesh.ai.vllm.tunnel import tunnel_manager
+        from cloudmesh.ai.vllm.client import VLLMClient
+
+        # 1. Resolve port and host for connectivity check
+        target_port = port
+        if not target_port:
+            default_server = self.db.get("cloudmesh.ai.default.server")
+            servers = self.db.get("cloudmesh.ai.server", {})
+            if default_server and isinstance(servers, dict):
+                target_port = servers.get(default_server, {}).get("local_port")
+            
+            if not target_port:
+                target_port = 8001
+
+        # Resolve host for the determined port
+        host = None
+        servers_by_host = self.db.get("cloudmesh.ai.server", {})
+        if isinstance(servers_by_host, dict):
+            for host_name, servers in servers_by_host.items():
+                if isinstance(servers, dict):
+                    for s_name, s_cfg in servers.items():
+                        if isinstance(s_cfg, dict) and (s_cfg.get("local_port") == target_port or s_cfg.get("remote_port") == target_port):
+                            host = s_cfg.get("host")
+                            break
+                if host: break
+
+        # 2. Ensure Tunnel and Backend are ready
+        if host:
+            console.print(f"[blue]Verifying tunnel and backend for {host}:{target_port}...[/blue]")
+            success, msg = tunnel_manager.start_tunnel(host, target_port)
+            if not success and msg != "Tunnel already active":
+                console.error(f"Tunnel failed: {msg}")
+                return
+
+            # Health check
+            client = VLLMClient(self.db, port=target_port)
+            if not client.is_alive():
+                console.error(f"Backend at port {target_port} is not responding. Please check if the vLLM server is running.")
+                return
+            console.ok("Tunnel active and backend healthy!")
+        else:
+            console.warning(f"Could not resolve host for port {target_port}. Skipping tunnel check, but backend may be unreachable.")
 
         # Use resolved config from YamlDB - check both client and llm paths for compatibility
         claude_config = self.db.get("cloudmesh.ai.client.claude") or self.db.get("cloudmesh.ai.llm.claude", {})
@@ -30,8 +69,20 @@ class ClaudeLauncher:
         
         # Support both uppercase and lowercase keys
         api_key = config.get("OPENAI_API_KEY") or config.get("openai_api_key")
+
+        # Resolve placeholders like {SERVER_MASTER_KEY} in the API key
+        if api_key and "{" in api_key and "}" in api_key:
+            from cloudmesh.ai.vllm.orchestrator import get_vllm_api_key
+            resolved_key = get_vllm_api_key(self.db)
+            if resolved_key:
+                api_key = resolved_key
+
         model = config.get("model") or config.get("ANTHROPIC_MODEL", "google/gemma-4-31B-it")
-        base_url = config.get("OPENAI_API_BASE") or config.get("openai_api_base") or config.get("base_url", "http://127.0.0.1:8001")
+        
+        if target_port:
+            base_url = f"http://127.0.0.1:{target_port}"
+        else:
+            base_url = config.get("OPENAI_API_BASE") or config.get("openai_api_base") or config.get("base_url", "http://127.0.0.1:8001")
         
         if not api_key:
             console.error("openai_api_key not found in resolved configuration.")

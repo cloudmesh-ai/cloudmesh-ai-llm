@@ -46,10 +46,15 @@ class DockerManager:
         subprocess.run(["docker", "stop", container_name], capture_output=True)
         subprocess.run(["docker", "rm", container_name], capture_output=True)
 
-    def run_container(self, cmd: str):
+    def run_container(self, cmd: str, env: dict = None):
         """Execute a docker run command."""
         try:
-            subprocess.run(cmd, check=True, capture_output=True, shell=True)
+            # Merge current environment with provided secrets to avoid cleartext in cmd
+            current_env = os.environ.copy()
+            if env:
+                current_env.update(env)
+                
+            subprocess.run(cmd, check=True, capture_output=True, shell=True, env=current_env)
             return True
         except subprocess.CalledProcessError as e:
             console.error(f"Error launching container: {e.stderr.decode()}")

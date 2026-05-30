@@ -27,6 +27,14 @@ class AiderLauncher:
         
         # Support both uppercase and lowercase keys
         api_key = config.get("OPENAI_API_KEY") or config.get("openai_api_key")
+
+        # Resolve placeholders like {SERVER_MASTER_KEY} in the API key
+        if api_key and "{" in api_key and "}" in api_key:
+            from cloudmesh.ai.vllm.orchestrator import get_vllm_api_key
+            resolved_key = get_vllm_api_key(self.db)
+            if resolved_key:
+                api_key = resolved_key
+
         model = config.get("model", "google/gemma-4-31B-it")
         
         # Resolve base URL: use explicit base_url if provided, otherwise construct from port
@@ -88,6 +96,14 @@ class AiderLauncher:
         
         # Support both uppercase and lowercase keys
         api_key = config.get("OPENAI_API_KEY") or config.get("openai_api_key")
+
+        # Resolve placeholders like {SERVER_MASTER_KEY} in the API key
+        if api_key and "{" in api_key and "}" in api_key:
+            from cloudmesh.ai.vllm.orchestrator import get_vllm_api_key
+            resolved_key = get_vllm_api_key(self.db)
+            if resolved_key:
+                api_key = resolved_key
+
         model = config.get("model", "google/gemma-4-31B-it")
         base_url = config.get("OPENAI_API_BASE") or config.get("openai_api_base") or config.get("base_url", "http://host.docker.internal:8001/v1")
         
@@ -127,24 +143,30 @@ class AiderLauncher:
             console.print(banner("Restarting Aider Container", f"Container: {container_name}"))
             # Use 'start -ai' to attach to the existing container interactively
             cmd = f"docker start -ai {container_name}"
+            env_vars = None
         else:
             console.print(banner("Creating Aider Container", f"Model: {aider_model}\nMounting current directory..."))
-            # Create container without --rm, give it a name, and install dependencies once
-            cmd = textwrap.dedent(f"""\
-                docker run -it \\
-                  --name {container_name} \\
-                  -v "$(pwd):/app" \\
-                  -w /app \\
-                  --add-host=host.docker.internal:host-gateway \\
-                  -e OPENAI_API_KEY="{api_key}" \\
-                  -e OPENAI_API_BASE="{base_url}" \\
-                  python:3.12-slim \\
-                  /bin/bash -c "apt-get update && apt-get install -y pandoc && pip install --quiet --no-cache-dir aider-chat && aider --model {aider_model}"
-            """).strip()
+            
+            # Prepare secrets for secure passing via environment
+            env_vars = {
+                "OPENAI_API_KEY": api_key,
+                "OPENAI_API_BASE": base_url,
+            }
+            
+            # Use a single-line command and pass secrets via -e KEY (without value)
+            cmd = (
+                f"docker run -it --name {container_name} "
+                f"-v \"$(pwd):/app\" -w /app "
+                f"--add-host=host.docker.internal:host-gateway "
+                f"-e OPENAI_API_KEY -e OPENAI_API_BASE "
+                f"python:3.12-slim "
+                f"/bin/bash -c \"apt-get update && apt-get install -y pandoc && pip install --quiet --no-cache-dir aider-chat && aider --model {aider_model}\""
+            )
 
-        console.print(f"[blue]Executing Docker command:[/blue]\n{cmd}")
+        console.print(f"[blue]Executing Docker command (Secrets Hidden):[/blue]\n{cmd}")
         
         try:
-            subprocess.run(cmd, check=True, shell=True)
+            # Use the DockerManager's secure run_container method
+            subprocess.run(cmd, check=True, shell=True, env={**os.environ, **(env_vars or {})})
         except subprocess.CalledProcessError as e:
             console.error(f"Aider Docker container exited with error: {e}")
