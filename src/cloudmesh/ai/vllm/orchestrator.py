@@ -11,6 +11,7 @@ from pathlib import Path
 from cloudmesh.ai.common import DotDict
 from cloudmesh.ai.common import banner
 from cloudmesh.ai.common.io import console
+from rich.status import Status
 from cloudmesh.ai.common.stopwatch import StopWatch
 from cloudmesh.ai.vllm.config import VLLMConfig
 from cloudmesh.ai.vllm.client import VLLMClient
@@ -547,71 +548,141 @@ class VLLMOrchestrator:
             console.error(f"Failed to stop UVA server: {e}")
             return False
 
-    def list_running_servers(self):
+    def list_running_servers(self, quiet=False):
         """List all running vLLM servers on UVA."""
-        console.banner("Running vLLM Servers")
+        if not quiet:
+            console.banner("Running vLLM Servers")
         try:
             sq = SQueue()
             jobs_data = sq.get_jobs()
 
             if not jobs_data:
-                console.warning("No running vLLM servers found on UVA.")
+                if not quiet:
+                    console.warning("No running vLLM servers found on UVA.")
                 return []
 
             servers_config = self.config.get("cloudmesh.ai.server", {})
             running_jobs = []
 
+            # Load state once for efficiency
+            state = self._load_state()
+
             for job in jobs_data:
                 job_id = job.get("job_id")
                 node = (
                     job.get("nodes", [{}])[0].get("name", "Unknown")
-                    if isinstance(job.get("nodes"), list)
+                    if isinstance(job.get("nodes"), list) and job.get("nodes")
                     else "Unknown"
                 )
                 job_name = job.get("name", "")
 
+                # Only consider vLLM jobs
                 if "vllm_" not in job_name:
                     continue
 
+                # 1. Authoritative Port & Name Parsing from Job Name
+                # Pattern: vllm_<name>_<port> or vllm_<port>
+                parsed_name = "Unknown"
+                parsed_port = "Unknown"
+                
+                match = re.search(r"vllm_(?:(.*)_)?(\d+)$", job_name)
+                if match:
+                    parsed_name = match.group(1) or "vllm-job"
+                    parsed_port = match.group(2)
+                elif "_" in job_name:
+                    match = re.search(r"_(\d+)$", job_name)
+                    if match:
+                        parsed_port = match.group(1)
+
                 server_name = "Unknown"
-                port = "Unknown"
-                if isinstance(servers_config, dict):
-                    for name in servers_config:
-                        # Use the specific server config for the port and job name
-                        server_cfg = self.config.get_server(name)
-                        remote_port = (
-                            server_cfg.get("remote_port", 8000) if server_cfg else 8000
-                        )
-                        resolved_job_name = self.get_job_name(
-                            server_cfg or self.config, remote_port
-                        )
-                        state = self._load_state()
-                        if (
-                            state.get(name, {}).get("job_id") == job_id
-                        ) or resolved_job_name == job_name:
-                            server_name = name
-                            port = remote_port
+                remote_port = parsed_port
+                
+                # 2. Match to Server Configuration
+                # Try to find a server config that matches the parsed name
+                if parsed_name != "Unknown":
+                    if parsed_name in servers_config:
+                        server_name = parsed_name
+                    else:
+                        # Try partial matching (e.g., 'gemma' matches 'uva.gemma2')
+                        for name in servers_config:
+                            if parsed_name in name or name.endswith(f".{parsed_name}"):
+                                server_name = name
+                                break
+                
+                # 3. Fallback to State Lookup if name still unknown
+                if server_name == "Unknown":
+                    for s_name, s_state in state.items():
+                        if s_state and str(s_state.get("job_id")) == str(job_id):
+                            server_name = s_name
+                            if remote_port == "Unknown":
+                                remote_port = s_state.get("remote_port") or s_state.get("local_port")
                             break
+
+                # 4. Final Port & State Resolution
+                local_port = "Unknown"
+                if parsed_port != "Unknown":
+                    # Authoritative port found in job name
+                    remote_port = parsed_port
+                    local_port = parsed_port
+                else:
+                    remote_port = "Unknown"
+
+                if server_name != "Unknown":
+                    server_cfg = self.config.get_server(server_name)
+                    
+                    # Remote port resolution if not authoritative from job name
+                    if remote_port == "Unknown" and server_cfg:
+                        remote_port = server_cfg.get("remote_port") or server_cfg.get("port")
+                    
+                    # Local port resolution: parsed -> state -> config -> remote
+                    if local_port == "Unknown":
+                        current_s_state = state.get(server_name, {})
+                        local_port = current_s_state.get("local_port")
+                        if not local_port and server_cfg:
+                            local_port = server_cfg.get("local_port")
+                        if not local_port or local_port == "Unknown":
+                            local_port = remote_port
+
+                    # Fallbacks and string conversion
+                    remote_port = str(remote_port) if remote_port != "Unknown" else "8000"
+                    local_port = str(local_port) if local_port != "Unknown" else remote_port
+
+                    # Authoritative State Sync: Update if Job ID or Port changed
+                    current_s_state = state.get(server_name, {})
+                    if str(current_s_state.get("job_id")) != str(job_id) or str(current_s_state.get("local_port")) != local_port:
+                        state[server_name] = {
+                            "job_id": job_id,
+                            "node_name": node,
+                            "local_port": local_port,
+                            "remote_port": remote_port,
+                            "status": "Running",
+                            "last_updated": time.time()
+                        }
+                        self._save_state(state)
 
                 running_jobs.append(
                     {
                         "server": server_name,
                         "job_id": job_id,
                         "node": node,
-                        "port": port,
+                        "port": remote_port,
+                        "local_port": local_port
                     }
                 )
 
             if not running_jobs:
-                console.warning("No vLLM servers found in the running jobs list.")
+                if not quiet:
+                    console.warning("No vLLM servers found in the running jobs list.")
                 return []
 
-            # Print as a table
-            headers = ["Server", "Job ID", "Node", "Port"]
-            data = [
-                [j["server"], j["job_id"], j["node"], j["port"]] for j in running_jobs
-            ]
-            console.print_table(headers, data)
+            # Print as a table if not quiet
+            if not quiet:
+                headers = ["Server", "Job ID", "Node", "Port"]
+                data = [
+                    [j["server"], j["job_id"], j["node"], j["port"]] for j in running_jobs
+                ]
+                console.print_table(headers, data)
+                
             return running_jobs
 
         except Exception as e:
@@ -703,6 +774,15 @@ class VLLMOrchestrator:
                 config, server_name, vllm_image=vllm_image
             )
             sbatch_file = f"{remote_dir}/submit.sh"
+
+            # Clear old log files to ensure a clean start
+            console.print(f"[blue]Cleaning old log files in {remote_dir}...[/blue]")
+            subprocess.run(
+                f"ssh -q uva 'rm -f {remote_dir}/*.out {remote_dir}/*.err'",
+                shell=True,
+                check=False,
+            )
+
             subprocess.run(
                 f"ssh -q uva 'echo \"{sbatch_script}\" > {sbatch_file}'",
                 shell=True,
@@ -1140,83 +1220,81 @@ class VLLMOrchestrator:
 
             success = False
 
-            for i in range(COUNT):
-                # 1. Stream any available logs from the vLLM process and check for success
-                if process:
-                    try:
-                        while True:
-                            line = process.stdout.readline()
-                            if not line:
-                                break
-                            console.print(line, end="")
-                            # Real-time detection: check if the success message is in the streamed line
-                            if any(
-                                pattern in line
-                                for pattern in [
-                                    "vLLM is up and running on 0.0.0.0",
-                                    "Application startup complete",
-                                ]
-                            ):
-                                app_ready = True
-                    except Exception:
-                        pass
-
-                # 2. Check if port is open AND application startup is complete in logs.
-                # We run the check via the login node to avoid direct SSH authentication issues.
-
-                # Check port
-                # Use direct nc from login node to compute node to avoid nested SSH authentication issues
-                port_check_cmd = f'ssh -q uva "nc -z {node_name} {remote_port}"'
-                port_res = subprocess.run(
-                    port_check_cmd, shell=True, capture_output=True
-                )
-                port_open = port_res.returncode == 0
-
-                # Check if model is actually loaded by calling /v1/models
-                # /health only indicates the process is running; /v1/models indicates the model is serving.
-                health_check_cmd = f'ssh -q uva "curl -s -f {auth_header} http://{node_name}:{remote_port}/v1/models"'
-                # console.print(f"[dim]Executing robust health check: {health_check_cmd}[/dim]")
-                health_res = subprocess.run(
-                    health_check_cmd, shell=True, capture_output=True, text=True
-                )
-
-                # Consider it ready if the /v1/models call succeeded (HTTP 200)
-                app_ready = health_res.returncode == 0
-
-                # 3. Check Slurm output files for the success message
-                if not app_ready:
-                    # Search both .out and .err files for the success message
-                    # We check for multiple possible success patterns
-                    log_patterns = [
-                        "vLLM is up and running on 0.0.0.0",
-                        "Application startup complete",
-                    ]
-                    # Create a regex pattern that matches any of the success strings
-                    pattern_regex = "|".join(log_patterns)
-                    # Resolve job name for log checking
-                    job_name = config.get("name")
-                    log_check_cmd = f"ssh -q uva \"grep -E -q '{pattern_regex}' {remote_dir}/{job_name}.out {remote_dir}/{job_name}.err 2>/dev/null\""
-                    log_res = subprocess.run(log_check_cmd, shell=True)
-                    if log_res.returncode == 0:
-                        app_ready = True
-
-                if i % 10 == 0:  # Log every 50s to avoid flooding
-                    debug_msg = f"[dim]Debug: port_open={port_open}, app_ready={app_ready} (Response: {health_res.stdout.strip()[:50]})[/dim]"
-                    console.print(debug_msg)
-
-                # If logs confirm the app is ready, we can proceed even if the login-node-to-compute-node 
-                # port check (nc) fails, as the SSH tunnel often works where direct nc doesn't.
-                if app_ready:
-                    if not port_open:
-                        console.warning(f"Port {remote_port} on {node_name} not reachable via nc from login node, but logs indicate app is ready. Proceeding with tunnel...")
-                    success = True
-                    break
-
-                console.print(
-                    f"A- Waiting for model to load on remote... ({i+1}/{COUNT})",
-                    end="\r",
-                )
-                time.sleep(5)
+            with console.status("[bold blue]Waiting for model to load on remote...[/bold blue]") as status:
+                for i in range(COUNT):
+                    # 1. Stream any available logs from the vLLM process and check for success
+                    if process:
+                        try:
+                            while True:
+                                line = process.stdout.readline()
+                                if not line:
+                                    break
+                                console.print(line, end="")
+                                # Real-time detection: check if the success message is in the streamed line
+                                if any(
+                                    pattern in line
+                                    for pattern in [
+                                        "vLLM is up and running on 0.0.0.0",
+                                        "Application startup complete",
+                                    ]
+                                ):
+                                    app_ready = True
+                        except Exception:
+                            pass
+ 
+                    # 2. Check if port is open AND application startup is complete in logs.
+                    # We run the check via the login node to avoid direct SSH authentication issues.
+ 
+                    # Check port
+                    # Use direct nc from login node to compute node to avoid nested SSH authentication issues
+                    port_check_cmd = f'ssh -q uva "nc -z {node_name} {remote_port}"'
+                    port_res = subprocess.run(
+                        port_check_cmd, shell=True, capture_output=True
+                    )
+                    port_open = port_res.returncode == 0
+ 
+                    # Check if model is actually loaded by calling /v1/models
+                    # /health only indicates the process is running; /v1/models indicates the model is serving.
+                    health_check_cmd = f'ssh -q uva "curl -s -f {auth_header} http://{node_name}:{remote_port}/v1/models"'
+                    # console.print(f"[dim]Executing robust health check: {health_check_cmd}[/dim]")
+                    health_res = subprocess.run(
+                        health_check_cmd, shell=True, capture_output=True, text=True
+                    )
+ 
+                    # Consider it ready if the /v1/models call succeeded (HTTP 200)
+                    app_ready = health_res.returncode == 0
+ 
+                    # 3. Check Slurm output files for the success message
+                    if not app_ready:
+                        # Search both .out and .err files for the success message
+                        # We check for multiple possible success patterns
+                        log_patterns = [
+                            "vLLM is up and running on 0.0.0.0",
+                            "Application startup complete",
+                        ]
+                        # Create a regex pattern that matches any of the success strings
+                        pattern_regex = "|".join(log_patterns)
+                        # Resolve job name for log checking
+                        job_name = config.get("name")
+                        log_check_cmd = f"ssh -q uva \"grep -E -q '{pattern_regex}' {remote_dir}/{job_name}.out {remote_dir}/{job_name}.err 2>/dev/null\""
+                        log_res = subprocess.run(log_check_cmd, shell=True)
+                        if log_res.returncode == 0:
+                            app_ready = True
+ 
+                    if i % 10 == 0:  # Log every 50s to avoid flooding
+                        debug_msg = f"[dim]Debug: port_open={port_open}, app_ready={app_ready} (Response: {health_res.stdout.strip()[:50]})[/dim]"
+                        console.print(debug_msg)
+ 
+                    # If logs confirm the app is ready, we can proceed even if the login-node-to-compute-node 
+                    # port check (nc) fails, as the SSH tunnel often works where direct nc doesn't.
+                    if app_ready:
+                        if not port_open:
+                            console.warning(f"Port {remote_port} on {node_name} not reachable via nc from login node, but logs indicate app is ready. Proceeding with tunnel...")
+                        success = True
+                        break
+ 
+                    status.update(f"[bold blue]Waiting for model to load on remote... ({i+1}/{COUNT})[/bold blue]")
+                    time.sleep(5)
 
             if success:
                 # Establish tunnel only after the server is confirmed healthy
@@ -1267,14 +1345,13 @@ class VLLMOrchestrator:
         else:
             # Existing health check for other platforms (which already have tunnels or are local)
             console.print("[blue]Verifying model health...[/blue]")
-            for i in range(COUNT):
-                if client.is_alive():
-                    console.ok("vLLM server is now ALIVE and model is loaded!")
-                    return True
-                console.print(
-                    f"B - Waiting for model to load... ({i+1}/{COUNT})", end="\r"
-                )
-                time.sleep(5)
+            with console.status("[bold blue]Waiting for model to load...[/bold blue]") as status:
+                for i in range(COUNT):
+                    if client.is_alive():
+                        console.ok("vLLM server is now ALIVE and model is loaded!")
+                        return True
+                    status.update(f"[bold blue]Waiting for model to load... ({i+1}/{COUNT})[/bold blue]")
+                    time.sleep(5)
 
             console.error("vLLM server failed to become healthy within 10 minutes.")
             return False

@@ -8,13 +8,20 @@ Cloudmesh AI simplifies the complexity of managing remote GPU nodes, SSH tunneli
 
 ## Quick Start Guide
 
-If you are new to Cloudmesh AI, we recommend following these steps to get started:
+If you are new to Cloudmesh AI, we recommend following this path to get your first model running and monitored:
 
-1.  **[Installation](./installation.md)**: Set up the package and configure your SSH access.
-2.  **[Starting AI Models](./user-manual/starting-services.md)**: Learn how to use `cmc llm start` to launch models like `uva.gemma` and `uva.gemma2`.
-3.  **[The Proxy Service](./proxy-service/introduction.md)**: Discover how to use our centralized gateway to access multiple backends and special models like `uva kimmi`.
-4.  **[Client Tooling](./client-tools/overview.md)**: Connect professional tools like **Cline**, **Aider**, and **Open WebUI** to your private infrastructure.
-5.  **[API Samples](./api-samples/python-examples.md)**: Get started with Python code examples using the OpenAI-compatible API.
+### 1. Core Setup
+- **[Installation](./installation.md)**: Set up the package and configure your SSH access.
+- **[Starting AI Models](./user-manual/starting-services.md)**: Learn how to use `cmc llm start` and configuration templates to launch models.
+- **[Monitoring Your Services](./user-manual/monitoring.md)**: Set up real-time observability with Prometheus and Grafana.
+
+### 2. Connecting & Expanding
+- **[The Proxy Service](./proxy-service/introduction.md)**: Use our centralized gateway to access multiple backends and special models.
+- **[Client Tooling](./client-tools/overview.md)**: Connect professional tools like **Cline**, **Aider**, and **Open WebUI**.
+- **[API Samples](./api-samples/python-examples.md)**: Integrate your models into your own apps using OpenAI-compatible API examples.
+
+### 3. Support
+- **[Troubleshooting Guide](./user-manual/troubleshooting.md)**: Find solutions to common issues with networking, tunnels, and GPU memory.
 
 ## Key Features
 

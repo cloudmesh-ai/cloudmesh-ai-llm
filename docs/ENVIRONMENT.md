@@ -167,6 +167,33 @@ Environment variables can override deeply nested YAML configuration paths by rep
 
 The core logic resides in the `EnvManager` class (`src/cloudmesh/ai/vllm/env_manager.py`).
 
+#### System Data Flow
+The following diagram illustrates how the orchestrator connects a remote GPU backend to a local observability stack:
+
+```mermaid
+graph LR
+    subgraph "Remote Cloud/HPC"
+        GPU[Remote GPU Node]
+        VLLM[vLLM Server]
+        GPU --> VLLM
+    end
+
+    subgraph "Local Machine"
+        Tunnel[SSH Tunnel]
+        Localhost[Localhost:Port]
+        Prom[Prometheus]
+        Graf[Grafana]
+        
+        Tunnel --> Localhost
+        Localhost --> Prom
+        Prom --> Graf
+    end
+
+    VLLM -- "SSH Tunnel" --> Tunnel
+```
+
+**Key Operational Workflows:**
+
 **Key Operational Workflows:**
 
 - **Intelligent Sync**: Implements a 3-way merge logic to prevent accidental overwrites of remote-only variables.

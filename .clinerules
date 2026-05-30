@@ -1,0 +1,4 @@
+# Python Execution Rules
+- Whenever executing Python scripts, tests, or modules, always use `pyenv` to ensure the correct Python version is used.
+- Prefer using `pyenv exec python` or ensuring the pyenv environment is explicitly activated before running commands.
+- Example: Instead of `python3 -m pytest`, use `pyenv exec python3 -m pytest`.

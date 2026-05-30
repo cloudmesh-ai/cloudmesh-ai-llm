@@ -46,30 +46,50 @@ class VLLMClient:
 
     def get_status(self):
         """
-        Check the vLLM server status.
+        Check the vLLM server status by probing multiple endpoints.
         Returns: 'OFFLINE', 'STARTING', or 'READY'.
         """
         api_key = self.config.get("ai.llm.vllm_api_key") or self.config.get("VLLM_API_KEY")
         headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
+        
+        # Use 127.0.0.1 and bypass any system proxies (HTTP_PROXY, etc.)
+        host = "127.0.0.1" if self.host in ["localhost", "127.0.0.1"] else self.host
+        base_url = f"http://{host}:{self.port}"
+        
+        # Disable proxies for local requests
+        session = requests.Session()
+        session.trust_env = False 
 
         try:
-            # 1. Check basic health endpoint
-            self._log_request("GET", self.api_url)
-            response = requests.get(self.api_url, headers=headers, timeout=5)
-            if response.status_code != 200:
-                return "STARTING"
+            # 1. Primary Check: /v1/models OR /health
+            # In vLLM, if either of these return 200, the engine is ready for traffic.
+            for path in ["/v1/models", "/health"]:
+                try:
+                    self._log_request("GET", f"{base_url}{path}")
+                    res = session.get(f"{base_url}{path}", headers=headers, timeout=3)
+                    if res.status_code == 200:
+                        return "READY"
+                    if res.status_code in [401, 403]:
+                        # Alive but requires authentication
+                        return "READY"
+                except (requests.exceptions.ConnectionError, requests.exceptions.Timeout):
+                    continue
+
+            # 2. Secondary Check: /metrics
+            # If ONLY metrics is up, the process is running but the engine might still be loading.
+            try:
+                self._log_request("GET", f"{base_url}/metrics")
+                res = session.get(f"{base_url}/metrics", headers=headers, timeout=3)
+                if res.status_code == 200:
+                    return "STARTING"
+            except:
+                pass
             
-            # 2. Verify that the model API is responsive
-            models_url = f"http://{self.host}:{self.port}/v1/models"
-            self._log_request("GET", models_url)
-            models_response = requests.get(models_url, headers=headers, timeout=5)
-            if models_response.status_code == 200:
-                return "READY"
-            
-            return "STARTING"
-        except requests.exceptions.ConnectionError:
             return "OFFLINE"
-        except Exception:
+
+        except Exception as e:
+            if self.debug:
+                console.print(f"[dim]Health check unexpected error: {e}[/dim]")
             return "OFFLINE"
 
     def is_alive(self):

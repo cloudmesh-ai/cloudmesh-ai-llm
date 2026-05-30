@@ -1,8 +1,15 @@
-# Cline Configuration Management
+# Deep Dive: Cline Setup & Configuration Management
 
 The `cmc llm cline` command suite provides a powerful interface for managing the configuration of the Cline AI agent. Instead of manually editing JSON files in hidden directories, you can use these commands to synchronize your LLM profiles from `llm.yaml` directly into Cline's settings.
 
 ## Overview
+
+Cline is an AI-powered software engineering agent that integrates directly into VS Code. To maximize its effectiveness, it requires precise configuration of the LLMs used for different stages of its workflow.
+
+### The "Plan" vs "Act" Paradigm
+Cline operates in two distinct modes:
+- **Plan Mode**: Used for analyzing requirements, architecting solutions, and creating a roadmap. This typically requires a model with strong reasoning and high-context windows.
+- **Act Mode**: Used for implementing the plan, writing code, and executing CLI commands. This requires a model that is precise, follows instructions strictly, and is efficient.
 
 Cline stores its configuration in two primary files located in `~/.cline/data`:
 - `globalState.json`: Contains general settings, including the active model, API base URLs, and extension state.
@@ -10,7 +17,7 @@ Cline stores its configuration in two primary files located in `~/.cline/data`:
 
 This command suite allows you to manage both files safely, with built-in backup mechanisms and profile resolution.
 
-## Usage
+## Setup & Configuration
 
 ### 1. Profile-based Model Synchronization
 
@@ -45,6 +52,8 @@ Set a specific model for acting while using the `uva.gemma` profile for planning
 ```bash
 cmc llm cline uva.gemma --act gemma-2-9b
 ```
+
+**Pro Tip:** For the best experience, use a larger model (like `uva.gemma2` or a 27B+ model) for `--plan` and a faster, more concise model for `--act`.
 
 ### Command Summary Table
 

@@ -20,8 +20,8 @@ Maintain the following structure in your `/scratch` space for persistence and hi
 /scratch/${USER}/
 ├── vllm_gemma4.sif           # Apptainer Image
 ├── gemma.sh                  # Execution script (see Section 4)
-├── hf_cache/                 # Persistent model weights storage
-└── gemma/
+├── hf_cache/                 # Persistent model weights storage (default: /scratch/$USER/hf_cache)
+└── gemma/                    # Key storage (default: $HOME/gemma)
     ├── HF_token.txt          # Hugging Face API Token (Gated access)
     └── server_master_key.txt  # vLLM API Bearer Token
 ```
@@ -41,18 +41,17 @@ mkdir -p $HOME/gemma
 
 ## 4. Execution Script (`gemma.sh`)
 
-Create this script in your scratch directory. It automates the environment variable export and the container launch.
+Create this script in your scratch directory. It automates the environment variable export and the container launch. While the Cloudmesh AI Orchestrator generates this automatically, a manual version looks like this:
 
 ```bash
 #!/bin/bash
-
-# 1. Load Keys from the secure directory
+# Note: The orchestrator handles these exports via ~/.config/cloudmesh/.env
 export HF_TOKEN=$(cat $HOME/gemma/HF_token.txt)
 export VLLM_API_KEY=$(cat $HOME/gemma/server_master_key.txt)
 
-# 2. Run Container with 4-way Tensor Parallelism
 module load apptainer
 
+# The orchestrator uses these dynamic flags based on your llm.yaml
 apptainer run --nv \
   -B /scratch/${USER}/hf_cache:/root/.cache/huggingface \
   --env HF_TOKEN="${HF_TOKEN}" \
@@ -61,10 +60,10 @@ apptainer run --nv \
   --model google/gemma-4-31B-it \
   --tensor-parallel-size 4 \
   --gpu-memory-utilization 0.90 \
-  --max-model-len 32768 \
-  --enable-prefix-caching \
-  --load-format safetensors \
-  --tool-call-parser gemma4
+  --max-model-len 16384 \
+  --port 8000 \
+  --cache-dir /scratch/${USER}/hf_cache \
+  --key-dir $HOME/gemma
 ```
 
 ## 5. Deployment Workflow
