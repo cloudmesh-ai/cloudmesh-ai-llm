@@ -189,7 +189,7 @@ class VLLMOrchestrator:
         remote_port = config.get("remote_port", 8000)
         job_name = config.get("name")
         remote_dir = config.get("dir")
-        email = config.get("email", "laszewski@gmail.com")
+        email = config.get("email", "thf2bn@virginia.edu")
         gpus = config.get("gpus", "4")
         mem = config.get("mem", "96gb")
         image = vllm_image or "{VLLM_IMAGE}"
@@ -219,7 +219,7 @@ class VLLMOrchestrator:
         # If the name has a port placeholder, replace it and return
         if "{port}" in name:
             return name.replace("{port}", str(port))
-        
+
         # Remove any existing port suffix (_digits) to prevent duplication
         base_name = re.sub(r"_\d+$", "", name)
         return f"{base_name}_{port}"
@@ -235,15 +235,17 @@ class VLLMOrchestrator:
             # 1. Try to guess the job name using config (e.g., vllm_server_18222)
             target_job_name = self.get_job_name(self.config, port)
             port_suffix = f"_{port}"
-            
+
             for job in jobs:
                 jname = job.get("name", "")
-                # Match if it's the exact guessed name, or contains it, 
+                # Match if it's the exact guessed name, or contains it,
                 # or if it's a vLLM job that ends with the port suffix (e.g., vllm_gemma_18222)
-                if (jname == target_job_name or 
-                    target_job_name in jname or 
-                    (jname.startswith("vllm") and jname.endswith(port_suffix))):
-                    
+                if (
+                    jname == target_job_name
+                    or target_job_name in jname
+                    or (jname.startswith("vllm") and jname.endswith(port_suffix))
+                ):
+
                     job_id = job.get("job_id")
                     nodes = job.get("nodes", [])
                     node_name = "Unknown"
@@ -251,11 +253,11 @@ class VLLMOrchestrator:
                         node_name = nodes[0].get("name", "Unknown")
                         if node_name != "Unknown" and "," in node_name:
                             node_name = node_name.split(",")[0]
-                    
+
                     return {"job_id": job_id, "node_name": node_name}
         except Exception as e:
             self.log_debug(f"Error resolving job by port {port}: {e}")
-        
+
         return None
 
     def resolve_port_by_job_id(self, job_id):
@@ -265,7 +267,7 @@ class VLLMOrchestrator:
             jobs = sq.get_jobs()
             if not jobs:
                 return None
-            
+
             for job in jobs:
                 if str(job.get("job_id")) == str(job_id):
                     jname = job.get("name", "")
@@ -278,31 +280,12 @@ class VLLMOrchestrator:
         return None
 
     def _kill_port_process(self, port: int):
-        """Kill any process currently binding to the specified local port gracefully."""
+        """Aggressively kill any process currently binding to the specified local port."""
         try:
-            # Use lsof to find the PID of the process using the port
-            cmd = f"lsof -t -iTCP:{port} -sTCP:LISTEN"
-            result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
-            pid_list = result.stdout.strip().split("\n") if result.stdout.strip() else []
-            
-            for p in pid_list:
-                if not p:
-                    continue
-                
-                # 1. Try SIGTERM first
-                subprocess.run(f"kill {p}", shell=True, capture_output=True)
-                
-                # Wait a short moment for graceful shutdown
-                time.sleep(0.5)
-                
-                # 2. Check if still running, then use SIGKILL
-                check = subprocess.run(f"ps -p {p}", shell=True, capture_output=True)
-                if check.returncode == 0:
-                    subprocess.run(f"kill -9 {p}", shell=True, capture_output=True)
-                    console.print(f"[dim]Forcefully killed process {p} on port {port}[/dim]")
-                else:
-                    console.print(f"[dim]Gracefully stopped process {p} on port {port}[/dim]")
-                    
+            # Use lsof to find PIDs and kill them immediately with SIGKILL to ensure port is freed
+            cmd = f"lsof -t -iTCP:{port} -sTCP:LISTEN | xargs kill -9"
+            subprocess.run(cmd, shell=True, capture_output=True)
+            self.log_debug(f"Cleared local port {port} using aggressive kill.")
         except Exception as e:
             console.warning(f"Could not kill process on port {port}: {e}")
 
@@ -348,9 +331,7 @@ class VLLMOrchestrator:
         script_content = config.get("script")
 
         if script_content:
-            console.print(
-                f"[dim]Using script from configuration for {script_name}[/dim]"
-            )
+            self.log_debug(f"Using script from configuration for {script_name}")
 
         if not script_content:
             console.print(
@@ -407,9 +388,13 @@ class VLLMOrchestrator:
             f"[blue]Deploying {script_name} to {target_host}:{remote_dir}...[/blue]"
         )
         try:
-            # Create remote directory
+            # Create remote directory and cache directory
+            cache_dir = config.get("cache_dir")
+            mkdir_cmd = f"mkdir -p {remote_dir}"
+            if cache_dir:
+                mkdir_cmd += f" && mkdir -p {cache_dir}"
             subprocess.run(
-                f"ssh -q {target_host} 'mkdir -p {remote_dir}'", shell=True, check=True
+                f"ssh -q {target_host} '{mkdir_cmd}'", shell=True, check=True
             )
             # Upload resolved content using scp
             temp_script = Path(f"temp_{script_name}")
@@ -432,8 +417,10 @@ class VLLMOrchestrator:
             # Execute script in that directory with port override
             remote_cmd = f"cd {remote_dir} && PORT={remote_port} bash {script_name}"
             console.print(f"[blue]Starting vLLM server on {target_host}...[/blue]")
-            console.print(f"[dim]Executing: ssh -q {target_host} '{remote_cmd}'[/dim]")
-            subprocess.run(f"ssh -q {target_host} '{remote_cmd}'", shell=True, check=True)
+            self.log_debug(f"Executing: ssh -q {target_host} '{remote_cmd}'")
+            subprocess.run(
+                f"ssh -q {target_host} '{remote_cmd}'", shell=True, check=True
+            )
             return True
         except subprocess.CalledProcessError as e:
             console.error(f"DGX launch failed: {e}")
@@ -502,11 +489,11 @@ class VLLMOrchestrator:
 
             # DEBUG: Show all jobs found by SQueue to diagnose matching issues
             if jobs_data:
-                console.print(
-                    f"[dim]SQueue found {len(jobs_data)} total jobs. Scanning for matches...[/dim]"
+                self.log_debug(
+                    f"SQueue found {len(jobs_data)} total jobs. Scanning for matches..."
                 )
             else:
-                console.print("[dim]SQueue returned no jobs.[/dim]")
+                self.log_debug("SQueue returned no jobs.")
 
             job_ids = []
             # We need the full server list to match jobs to server names
@@ -529,9 +516,7 @@ class VLLMOrchestrator:
                     job_name = self.get_job_name(self.config, remote_port)
                     # Match if job name is exactly the resolved name or contains it
                     if jname == job_name or job_name in jname:
-                        console.print(
-                            f"[dim]  Match found: job {jid} (name: {jname})[/dim]"
-                        )
+                        self.log_debug(f"Match found: job {jid} (name: {jname})")
                         job_ids.append(jid)
 
             if not job_ids:
@@ -539,7 +524,7 @@ class VLLMOrchestrator:
                 return False
 
             for id in job_ids:
-                console.print(f"[dim]Cancelling job {id}...[/dim]")
+                self.log_debug(f"Cancelling job {id}...")
                 sq.cancel(id)
 
             console.ok(f"Successfully cancelled {len(job_ids)} job(s).")
@@ -584,7 +569,7 @@ class VLLMOrchestrator:
                 # Pattern: vllm_<name>_<port> or vllm_<port>
                 parsed_name = "Unknown"
                 parsed_port = "Unknown"
-                
+
                 match = re.search(r"vllm_(?:(.*)_)?(\d+)$", job_name)
                 if match:
                     parsed_name = match.group(1) or "vllm-job"
@@ -596,7 +581,7 @@ class VLLMOrchestrator:
 
                 server_name = "Unknown"
                 remote_port = parsed_port
-                
+
                 # 2. Match to Server Configuration
                 # Try to find a server config that matches the parsed name
                 if parsed_name != "Unknown":
@@ -608,14 +593,16 @@ class VLLMOrchestrator:
                             if parsed_name in name or name.endswith(f".{parsed_name}"):
                                 server_name = name
                                 break
-                
+
                 # 3. Fallback to State Lookup if name still unknown
                 if server_name == "Unknown":
                     for s_name, s_state in state.items():
                         if s_state and str(s_state.get("job_id")) == str(job_id):
                             server_name = s_name
                             if remote_port == "Unknown":
-                                remote_port = s_state.get("remote_port") or s_state.get("local_port")
+                                remote_port = s_state.get("remote_port") or s_state.get(
+                                    "local_port"
+                                )
                             break
 
                 # 4. Final Port & State Resolution
@@ -629,11 +616,13 @@ class VLLMOrchestrator:
 
                 if server_name != "Unknown":
                     server_cfg = self.config.get_server(server_name)
-                    
+
                     # Remote port resolution if not authoritative from job name
                     if remote_port == "Unknown" and server_cfg:
-                        remote_port = server_cfg.get("remote_port") or server_cfg.get("port")
-                    
+                        remote_port = server_cfg.get("remote_port") or server_cfg.get(
+                            "port"
+                        )
+
                     # Local port resolution: parsed -> state -> config -> remote
                     if local_port == "Unknown":
                         current_s_state = state.get(server_name, {})
@@ -644,19 +633,26 @@ class VLLMOrchestrator:
                             local_port = remote_port
 
                     # Fallbacks and string conversion
-                    remote_port = str(remote_port) if remote_port != "Unknown" else "8000"
-                    local_port = str(local_port) if local_port != "Unknown" else remote_port
+                    remote_port = (
+                        str(remote_port) if remote_port != "Unknown" else "8000"
+                    )
+                    local_port = (
+                        str(local_port) if local_port != "Unknown" else remote_port
+                    )
 
                     # Authoritative State Sync: Update if Job ID or Port changed
                     current_s_state = state.get(server_name, {})
-                    if str(current_s_state.get("job_id")) != str(job_id) or str(current_s_state.get("local_port")) != local_port:
+                    if (
+                        str(current_s_state.get("job_id")) != str(job_id)
+                        or str(current_s_state.get("local_port")) != local_port
+                    ):
                         state[server_name] = {
                             "job_id": job_id,
                             "node_name": node,
                             "local_port": local_port,
                             "remote_port": remote_port,
                             "status": "Running",
-                            "last_updated": time.time()
+                            "last_updated": time.time(),
                         }
                         self._save_state(state)
 
@@ -666,7 +662,7 @@ class VLLMOrchestrator:
                         "job_id": job_id,
                         "node": node,
                         "port": remote_port,
-                        "local_port": local_port
+                        "local_port": local_port,
                     }
                 )
 
@@ -679,10 +675,11 @@ class VLLMOrchestrator:
             if not quiet:
                 headers = ["Server", "Job ID", "Node", "Port"]
                 data = [
-                    [j["server"], j["job_id"], j["node"], j["port"]] for j in running_jobs
+                    [j["server"], j["job_id"], j["node"], j["port"]]
+                    for j in running_jobs
                 ]
                 console.print_table(headers, data)
-                
+
             return running_jobs
 
         except Exception as e:
@@ -691,9 +688,7 @@ class VLLMOrchestrator:
 
     def launch_uva(self, server_name: str, port_override: int = None):
         """UVA HPC specific launch: Deployment -> ijob -> Tunnel -> Apptainer."""
-        console.print(
-            "[bold red]DEBUG: Executing updated launch_uva logic...[/bold red]"
-        )
+        self.log_debug("Executing updated launch_uva logic...")
         config = self.server_config
         if not config:
             console.error(
@@ -706,12 +701,13 @@ class VLLMOrchestrator:
         remote_dir = config.get("dir")
 
         # Debug print of the resolved config
-        console.print(f"\n[dim]DEBUG: Resolved config for {server_name}:[/dim]")
-        pretty_config = yaml.dump(config, default_flow_style=False)
-        console.print(f"[dim]{pretty_config}[/dim]")
+        self.log_debug(f"Resolved config for {server_name}:")
+        for k, v in config.items():
+            self.log_debug(f"{k}: {v}")
 
         # Confirmation prompt for job name and directory
         console.print(f"\n[bold yellow]Configuration Verification:[/bold yellow]")
+        console.print(f"  Config File: [green]{self.config.user_config_path}[/green]")
         console.print(f"  Job Name: [green]{job_name}[/green]")
         console.print(f"  Remote Dir: [green]{remote_dir}[/green]")
 
@@ -722,6 +718,15 @@ class VLLMOrchestrator:
         try:
             # 1. Deployment (MUST happen before ijob)
             console.banner("Deployment")
+
+            # Resolve image path and generate submit script to print it early
+            vllm_image = self._resolve_vllm_image(config)
+            sbatch_script = self._generate_sbatch_script(
+                config, server_name, vllm_image=vllm_image
+            )
+            console.banner("Generated Submit Script")
+            console.print(f"\n{sbatch_script}\n")
+
             script_name = "start_uva.sh"
             script_content = self.get_resolved_script(script_name)
 
@@ -758,21 +763,15 @@ class VLLMOrchestrator:
                 if temp_script.exists():
                     temp_script.unlink()
             subprocess.run(
-                f"ssh -q uva 'chmod +x {remote_dir}/{script_name}'", shell=True, check=True
+                f"ssh -q uva 'chmod +x {remote_dir}/{script_name}'",
+                shell=True,
+                check=True,
             )
             console.ok(f"Successfully uploaded {script_name} to {remote_dir}")
 
             # 2. Allocation
             console.banner("Allocation")
             console.print("[blue]Requesting GPU allocation via sbatch...[/blue]")
-
-            # Resolve image path
-            vllm_image = self._resolve_vllm_image(config)
-
-            # Generate the sbatch script using the helper method
-            sbatch_script = self._generate_sbatch_script(
-                config, server_name, vllm_image=vllm_image
-            )
             sbatch_file = f"{remote_dir}/submit.sh"
 
             # Clear old log files to ensure a clean start
@@ -790,7 +789,7 @@ class VLLMOrchestrator:
             )
 
             submit_cmd = f"ssh -q uva 'sbatch {sbatch_file}'"
-            console.print(f"[dim]Executing: {submit_cmd}[/dim]")
+            self.log_debug(f"Executing: {submit_cmd}")
             result = subprocess.run(
                 submit_cmd, shell=True, capture_output=True, text=True, check=True
             )
@@ -819,38 +818,49 @@ class VLLMOrchestrator:
             # Poll squeue to find the allocated node
             node_name = None
             sq = SQueue(host="uva")
-            console.print(f"[dim]Polling squeue for Job ID: {job_id}...[/dim]")
+            self.log_debug(f"Polling squeue for Job ID: {job_id}...")
             for i in range(60):  # Wait up to 5 minutes
                 jobs = sq.get_jobs()
                 if not isinstance(jobs, list):
                     self.log_debug(f"SQueue.get_jobs returned non-list: {type(jobs)}")
                     time.sleep(5)
                     continue
-                
+
                 if i % 5 == 0:
-                    console.print(f"[dim]SQueue check {i+1}/60: Found {len(jobs)} jobs...[/dim]", end="\r")
+                    console.print(
+                        f"[dim]SQueue check {i+1}/60: Found {len(jobs)} jobs...[/dim]",
+                        end="\r",
+                    )
                     if len(jobs) > 0 and i == 0:
                         self.log_debug(f"Sample job from SQueue: {jobs[0]}")
                     elif len(jobs) == 0:
                         self.log_debug("SQueue returned no jobs.")
-                    
+
                 for job in jobs:
                     if not isinstance(job, dict):
                         continue
-                    
+
                     # Cast both to string to avoid type mismatch (int vs str)
                     if str(job.get("job_id")) == str(job_id):
                         nodes = job.get("nodes", [])
-                        if isinstance(nodes, list) and nodes and isinstance(nodes[0], dict):
+                        if (
+                            isinstance(nodes, list)
+                            and nodes
+                            and isinstance(nodes[0], dict)
+                        ):
                             node_name = nodes[0].get("name")
                             if node_name and node_name != "Unknown":
                                 node_name = node_name.split(",")[0]
                                 break
-                
+
                 if i == 59 and not node_name:
                     # Final attempt: log what was actually found to help diagnosis
-                    found_ids = [str(j.get("job_id")) for j in jobs if isinstance(j, dict)]
-                    console.error(f"Job {job_id} not found in SQueue after 60 attempts. Found IDs: {found_ids}")
+                    found_ids = [
+                        str(j.get("job_id")) for j in jobs if isinstance(j, dict)
+                    ]
+                    console.error(
+                        f"Job {job_id} not found in SQueue after 60 attempts. Found IDs: {found_ids}"
+                    )
                 if node_name:
                     break
                 time.sleep(5)
@@ -878,6 +888,25 @@ class VLLMOrchestrator:
             console.ok(
                 f"vLLM server is now starting on {node_name} via Slurm allocation."
             )
+
+            # Final Summary
+            local_port = config.get("local_port", remote_port)
+            console.banner("vLLM Server Summary")
+            console.print(f"[bold green]Status:[/bold green] ALIVE")
+            console.print(f"[bold green]Node:[/bold green] {node_name}")
+            console.print(f"[bold green]Local Port:[/bold green] {local_port}")
+            console.print("\n[bold yellow]Quick Commands:[/bold yellow]")
+            console.print(f"  Stop Server: [blue]cmc stop server {server_name}[/blue]")
+            console.print(
+                f"  Check Health: [blue]curl http://localhost:{local_port}/health[/blue]"
+            )
+            console.print(
+                f"  Check Metrics: [blue]curl http://localhost:{local_port}/metrics[/blue]"
+            )
+            console.print(
+                "\n[bold green]Finish: vLLM server is deployed and running![/bold green]"
+            )
+
             # Return both node_name and the process so we can continue streaming logs
             return node_name, process
         except subprocess.CalledProcessError as e:
@@ -1007,6 +1036,7 @@ class VLLMOrchestrator:
         for key, value in config_data.items():
             if isinstance(value, str) and "{" in value and "}" in value:
                 pattern = r"\{([^}]+)\}"
+
                 def replace_ext(match):
                     ref = match.group(1)
                     if ":" in ref and (ref.startswith("~") or "/" in ref):
@@ -1017,6 +1047,7 @@ class VLLMOrchestrator:
                             return "$USER"
                         return resolved
                     return f"{{{ref}}}"
+
                 config_data[key] = re.sub(pattern, replace_ext, value)
 
         # Update job_name to reflect the port if an override is provided.
@@ -1108,18 +1139,38 @@ class VLLMOrchestrator:
             StopWatch.benchmark()
             return True
 
-        # If not alive locally, try to establish tunnel first in case it's alive remotely
-        if target_host not in ["localhost", "127.0.0.1"]:
-            from cloudmesh.ai.vllm.tunnel import tunnel_manager
-            console.print(f"[blue]Attempting to establish tunnel to {target_host}:{self.server_config['remote_port']}...[/blue]")
-            success, msg = tunnel_manager.start_tunnel(target_host, self.server_config['remote_port'])
-            if success or msg == "Tunnel already active":
-                # Re-check health after tunneling
-                if client.is_alive():
-                    console.ok("vLLM server is now ALIVE via tunnel!")
-                    StopWatch.stop("vllm_startup")
-                    StopWatch.benchmark()
-                    return True
+            # If not alive locally, try to establish tunnel first in case it's alive remotely
+            if target_host not in ["localhost", "127.0.0.1"]:
+                from cloudmesh.ai.vllm.tunnel import tunnel_manager
+
+                # Try to resolve the actual compute node for the tunnel destination
+                dest_host = None
+                job_info = self.resolve_job_by_port(self.server_config["remote_port"])
+                if job_info:
+                    dest_host = job_info.get("node_name")
+
+                console.print(
+                    f"[blue]Attempting to establish tunnel to {target_host}:{dest_host or '127.0.0.1'}:{self.server_config['remote_port']}...[/blue]"
+                )
+                self._kill_port_process(self.server_config["remote_port"])
+                
+                custom_cmd = self.server_config.get("tunnel")
+                if custom_cmd:
+                    custom_cmd = custom_cmd.replace("{local_port}", str(self.server_config['remote_port'])).replace("{remote_port}", str(self.server_config['remote_port']))
+                
+                success, msg = tunnel_manager.start_tunnel(
+                    target_host, 
+                    self.server_config["remote_port"], 
+                    dest_host=dest_host, 
+                    custom_command=custom_cmd
+                )
+                if success or msg == "Tunnel already active":
+                    # Re-check health after tunneling
+                    if client.is_alive():
+                        console.ok("vLLM server is now ALIVE via tunnel!")
+                        StopWatch.stop("vllm_startup")
+                        StopWatch.benchmark()
+                        return True
 
         # 2. Platform-specific Launch
         with StopWatch.timer("platform_launch"):
@@ -1220,7 +1271,9 @@ class VLLMOrchestrator:
 
             success = False
 
-            with console.status("[bold blue]Waiting for model to load on remote...[/bold blue]") as status:
+            with console.status(
+                "[bold blue]Waiting for model to load on remote...[/bold blue]"
+            ) as status:
                 for i in range(COUNT):
                     # 1. Stream any available logs from the vLLM process and check for success
                     if process:
@@ -1241,10 +1294,10 @@ class VLLMOrchestrator:
                                     app_ready = True
                         except Exception:
                             pass
- 
+
                     # 2. Check if port is open AND application startup is complete in logs.
                     # We run the check via the login node to avoid direct SSH authentication issues.
- 
+
                     # Check port
                     # Use direct nc from login node to compute node to avoid nested SSH authentication issues
                     port_check_cmd = f'ssh -q uva "nc -z {node_name} {remote_port}"'
@@ -1252,7 +1305,7 @@ class VLLMOrchestrator:
                         port_check_cmd, shell=True, capture_output=True
                     )
                     port_open = port_res.returncode == 0
- 
+
                     # Check if model is actually loaded by calling /v1/models
                     # /health only indicates the process is running; /v1/models indicates the model is serving.
                     health_check_cmd = f'ssh -q uva "curl -s -f {auth_header} http://{node_name}:{remote_port}/v1/models"'
@@ -1260,10 +1313,10 @@ class VLLMOrchestrator:
                     health_res = subprocess.run(
                         health_check_cmd, shell=True, capture_output=True, text=True
                     )
- 
+
                     # Consider it ready if the /v1/models call succeeded (HTTP 200)
                     app_ready = health_res.returncode == 0
- 
+
                     # 3. Check Slurm output files for the success message
                     if not app_ready:
                         # Search both .out and .err files for the success message
@@ -1280,20 +1333,24 @@ class VLLMOrchestrator:
                         log_res = subprocess.run(log_check_cmd, shell=True)
                         if log_res.returncode == 0:
                             app_ready = True
- 
+
                     if i % 10 == 0:  # Log every 50s to avoid flooding
                         debug_msg = f"[dim]Debug: port_open={port_open}, app_ready={app_ready} (Response: {health_res.stdout.strip()[:50]})[/dim]"
                         console.print(debug_msg)
- 
-                    # If logs confirm the app is ready, we can proceed even if the login-node-to-compute-node 
+
+                    # If logs confirm the app is ready, we can proceed even if the login-node-to-compute-node
                     # port check (nc) fails, as the SSH tunnel often works where direct nc doesn't.
                     if app_ready:
                         if not port_open:
-                            console.warning(f"Port {remote_port} on {node_name} not reachable via nc from login node, but logs indicate app is ready. Proceeding with tunnel...")
+                            console.warning(
+                                f"Port {remote_port} on {node_name} not reachable via nc from login node, but logs indicate app is ready. Proceeding with tunnel..."
+                            )
                         success = True
                         break
- 
-                    status.update(f"[bold blue]Waiting for model to load on remote... ({i+1}/{COUNT})[/bold blue]")
+
+                    status.update(
+                        f"[bold blue]Waiting for model to load on remote... ({i+1}/{COUNT})[/bold blue]"
+                    )
                     time.sleep(5)
 
             if success:
@@ -1319,9 +1376,22 @@ class VLLMOrchestrator:
                         f"[blue]Server is healthy. Establishing tunnel to {node_name}...[/blue]"
                     )
                     self._kill_port_process(local_port)
-                    tunnel_cmd = f"ssh -L {local_port}:{node_name}:{remote_port} uva -N"
-                    subprocess.Popen(tunnel_cmd, shell=True)
-                    console.ok("Tunnel established in background.")
+                    from cloudmesh.ai.vllm.tunnel import tunnel_manager
+                    
+                    custom_cmd = self.server_config.get("tunnel")
+                    if custom_cmd:
+                        custom_cmd = custom_cmd.replace("{local_port}", str(local_port)).replace("{remote_port}", str(remote_port))
+                    
+                    success, msg = tunnel_manager.start_tunnel(
+                        "uva", 
+                        local_port, 
+                        dest_host=node_name, 
+                        custom_command=custom_cmd
+                    )
+                    if success or msg == "Tunnel already active":
+                        console.ok("Tunnel established in background.")
+                    else:
+                        console.error(f"Failed to establish tunnel: {msg}")
 
                 console.ok(
                     "\n vLLM server is now ALIVE and Application startup complete!"
@@ -1345,12 +1415,16 @@ class VLLMOrchestrator:
         else:
             # Existing health check for other platforms (which already have tunnels or are local)
             console.print("[blue]Verifying model health...[/blue]")
-            with console.status("[bold blue]Waiting for model to load...[/bold blue]") as status:
+            with console.status(
+                "[bold blue]Waiting for model to load...[/bold blue]"
+            ) as status:
                 for i in range(COUNT):
                     if client.is_alive():
                         console.ok("vLLM server is now ALIVE and model is loaded!")
                         return True
-                    status.update(f"[bold blue]Waiting for model to load... ({i+1}/{COUNT})[/bold blue]")
+                    status.update(
+                        f"[bold blue]Waiting for model to load... ({i+1}/{COUNT})[/bold blue]"
+                    )
                     time.sleep(5)
 
             console.error("vLLM server failed to become healthy within 10 minutes.")
