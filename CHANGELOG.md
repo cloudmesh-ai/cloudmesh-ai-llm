@@ -15,6 +15,9 @@ All notable changes to `cloudmesh-ai-llm` will be documented in this file.
 - **Command Consolidation**: Removed the redundant `cmc gemma` command group and consolidated all functionality into `cmc llm`.
 - **UVA HPC Orchestration**: Replaced `ijob` based allocation with a simplified Slurm script submission process.
 - **Configuration Relocation**: Moved vLLM server configurations to a dedicated `config/` directory for better project organization.
+- **vLLM Orchestration**: Enhanced `orchestrator.py` and `server.py` for better stability and management.
+- **Slurm Integration**: Improved `SQueue` functionality and refined the `start_dgx.sh` template for DGX systems.
+- **Documentation**: Updated `docs/index.md`, `docs/installation.md`, and `mkdocs.yml` to reflect current state.
 
 ### Removed
 - **Gemma Command Group**: Deleted `src/cloudmesh/ai/command/gemma.py` and associated templates.
