@@ -1,0 +1,1312 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+      
+        <link rel="prev" href="starting-services.html">
+      
+      
+        <link rel="next" href="../proxy-service/introduction.html">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/theme/favicon.svg">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+    
+    
+      
+        <title>Monitoring Services - Cloudmesh AI Llm</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/_mkdocstrings.css">
+    
+      <link rel="stylesheet" href="../css/custom.css">
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="#1e90ff" data-md-color-accent="#1e90ff">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#monitoring-your-vllm-services" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../index.html" title="Cloudmesh AI Llm" class="md-header__button md-logo" aria-label="Cloudmesh AI Llm" data-md-component="logo">
+      
+  <img src="../assets/theme/logo-white.png" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Cloudmesh AI Llm
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Monitoring Services
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="#1e90ff" data-md-color-accent="#1e90ff"  aria-hidden="true"  type="radio" name="__palette" id="__palette_0">
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="#1e90ff" data-md-color-accent="#1e90ff"  aria-hidden="true"  type="radio" name="__palette" id="__palette_1">
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../index.html" title="Cloudmesh AI Llm" class="md-nav__button md-logo" aria-label="Cloudmesh AI Llm" data-md-component="logo">
+      
+  <img src="../assets/theme/logo-white.png" alt="logo">
+
+    </a>
+    Cloudmesh AI Llm
+  </label>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../index.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    User Manual
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    User Manual
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../installation.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Installation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="starting-services.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Starting AI Services
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Monitoring Services
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="monitoring.html" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Monitoring Services
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#1-infrastructure-resource-monitoring-uva-slurm" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Infrastructure &amp; Resource Monitoring (UVA Slurm)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="1. Infrastructure &amp; Resource Monitoring (UVA Slurm)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#open-grafana-dashboard" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Open Grafana Dashboard
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-service-connectivity-health" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Service Connectivity &amp; Health
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="2. Service Connectivity &amp; Health">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#server-status-summary-rich-summary-table" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Server Status Summary (Rich Summary Table)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#detailed-server-view" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Detailed Server View
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-real-time-engine-logs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Real-time Engine Logs
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-full-observability-stack-prometheus-grafana" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Full Observability Stack (Prometheus &amp; Grafana)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="4. Full Observability Stack (Prometheus &amp; Grafana)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#launch-the-stack" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Launch the Stack
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#stop-the-stack" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Stop the Stack
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-lightweight-api-monitoring" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Lightweight API Monitoring
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Proxy Service
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Proxy Service
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../proxy-service/introduction.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Introduction
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Client Tooling
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Client Tooling
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../client-tools/overview.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Examples
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    API Examples
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-samples/python-examples.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Python Samples
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Project
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../CHANGELOG.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Changelog
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="https://github.com/cloudmesh-ai/cloudmesh-ai-llm" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    GitHub
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="https://github.com/cloudmesh-ai/cloudmesh-ai-llm/issues" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Issues
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#1-infrastructure-resource-monitoring-uva-slurm" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Infrastructure &amp; Resource Monitoring (UVA Slurm)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="1. Infrastructure &amp; Resource Monitoring (UVA Slurm)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#open-grafana-dashboard" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Open Grafana Dashboard
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-service-connectivity-health" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Service Connectivity &amp; Health
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="2. Service Connectivity &amp; Health">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#server-status-summary-rich-summary-table" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Server Status Summary (Rich Summary Table)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#detailed-server-view" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Detailed Server View
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-real-time-engine-logs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Real-time Engine Logs
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-full-observability-stack-prometheus-grafana" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Full Observability Stack (Prometheus &amp; Grafana)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="4. Full Observability Stack (Prometheus &amp; Grafana)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#launch-the-stack" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Launch the Stack
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#stop-the-stack" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Stop the Stack
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-lightweight-api-monitoring" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Lightweight API Monitoring
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+
+
+<style>
+.doc-object { 
+    border: 1px solid rgba(0, 0, 0, 0.2) !important; 
+    border-radius: 4px !important; 
+    padding: 0.5rem !important; 
+    margin: 0.5rem 0 !important; 
+    background-color: #ffffff !important;
+}
+
+.doc-object .doc-object {
+    background-color: transparent !important;
+}
+
+[data-md-color-scheme="slate"] .doc-object {
+    border: 1px solid rgba(255, 255, 255, 0.2) !important;
+}
+
+/* Remove width restrictions to allow content to fill available space */
+:root {
+    --md-content-max-width: 100% !important;
+}
+
+.md-content__inner, 
+.md-main__inner,
+.md-grid {
+    max-width: none !important;
+    width: 100% !important;
+}
+
+/* Add breathing room between the middle column and sidebars */
+.md-content__inner {
+    padding-left: 2rem !important;
+    padding-right: 2rem !important;
+}
+</style>
+<h1 id="monitoring-your-vllm-services">Monitoring Your vLLM Services</h1>
+<p>Once your vLLM server is running, you can monitor its health and performance using a variety of tools provided by the <code>cmc llm</code> command suite.</p>
+<h2 id="1-infrastructure-resource-monitoring-uva-slurm">1. Infrastructure &amp; Resource Monitoring (UVA Slurm)</h2>
+<p>If you are running your model on UVA infrastructure, you can track GPU utilization, memory usage, and CPU load via the UVA Grafana dashboards.</p>
+<h3 id="open-grafana-dashboard">Open Grafana Dashboard</h3>
+<p>The <code>monitor slurm</code> command automatically resolves your current Job ID and Node name and opens the correct dashboard in your browser.</p>
+<pre><code class="language-bash"># Monitor the default server
+cmc llm monitor slurm
+
+# Monitor a specific named server
+cmc llm monitor slurm my-server-name
+
+# Find the job based on the local port you are using
+cmc llm monitor slurm --port 8001
+</code></pre>
+<p><strong>What to look for in Grafana:</strong>
+- <strong>GPU Utilization</strong>: Ensure the GPU is active during inference.
+- <strong>VRAM Usage</strong>: Monitor for "Out of Memory" (OOM) patterns.
+- <strong>Node Health</strong>: Check for CPU spikes or network bottlenecks on the allocated node.</p>
+<hr />
+<h2 id="2-service-connectivity-health">2. Service Connectivity &amp; Health</h2>
+<p>To verify that your server is reachable, the SSH tunnel is functioning, and the model is fully loaded, use the <code>status</code> command.</p>
+<pre><code class="language-bash"># List all running servers and their health in a summary table
+cmc llm status
+
+# Check detailed status for a specific server
+cmc llm status my-server-name
+</code></pre>
+<h3 id="server-status-summary-rich-summary-table">Server Status Summary (Rich Summary Table)</h3>
+<p>When run without arguments, <code>cmc llm status</code> provides a high-visibility <strong>Rich Summary Table</strong> of all active vLLM instances. This table uses color-coding and structured formatting to allow for instant health assessment of your LLM fleet.</p>
+<p><strong>Table Columns &amp; Visual Indicators:</strong>
+- <strong>Server</strong>: The name of the configured server.
+- <strong>Health</strong>: The current operational state of the vLLM engine, highlighted with color-coded status indicators:
+  - 🟢 <strong>READY</strong>: The model is fully loaded into VRAM and is serving requests.
+  - 🟡 <strong>STARTING</strong>: The process is running, but the model is still loading or initializing.
+  - 🔴 <strong>OFFLINE</strong>: The server is unreachable or the process has crashed.
+- <strong>Node</strong>: The specific GPU compute node (e.g., <code>gpu-node-01</code>) where the model is currently allocated. This helps quickly identify which physical hardware is being utilized.
+- <strong>Port</strong>: The remote port the server is listening on.
+- <strong>Tunnel</strong>: Connectivity status between your local machine and the remote node:
+  - 🟢 <strong>Active</strong>: Local port is successfully mapped.
+  - 🔴 <strong>Inactive</strong>: Tunnel is down; you cannot reach the API locally.</p>
+<h3 id="detailed-server-view">Detailed Server View</h3>
+<p>Providing a server name gives a focused view of that specific instance, including the host address and allocated node name.</p>
+<hr />
+<h2 id="3-real-time-engine-logs">3. Real-time Engine Logs</h2>
+<p>For deep debugging or monitoring the model's loading sequence, you can stream the server logs directly from the remote host.</p>
+<pre><code class="language-bash"># Stream logs in real-time
+cmc llm logs my-server-name --follow
+
+# Search for specific errors or keywords in the logs
+cmc llm logs my-server-name --grep &quot;Error&quot;
+</code></pre>
+<p><strong>Common log events to watch for:</strong>
+- <code>vLLM engine started</code>: Confirms the model is fully loaded into VRAM.
+- <code>HTTP request received</code>: Confirms the server is processing incoming prompts.</p>
+<hr />
+<h2 id="4-full-observability-stack-prometheus-grafana">4. Full Observability Stack (Prometheus &amp; Grafana)</h2>
+<p>For professional-grade monitoring with historical data and complex charts, you can launch a dedicated observability stack. This involves running Prometheus to collect metrics from vLLM and Grafana to visualize them.</p>
+<h3 id="launch-the-stack">Launch the Stack</h3>
+<p>The <code>monitor stack</code> command provides a fully automated observability setup. It autodiscovers your vLLM server port, configures the Prometheus scraper, and provisions the Grafana data source and dashboards automatically using Docker Compose.</p>
+<pre><code class="language-bash"># Launch stack (autodetects active vLLM port)
+cmc llm monitor stack
+
+# Launch stack for a specific tunneled port
+cmc llm monitor stack --port 18222
+</code></pre>
+<p><strong>What happens automatically:</strong>
+- <strong>Port Discovery</strong>: The tool searches for active vLLM metrics endpoints on your host.
+- <strong>Zero-Config Setup</strong>: Prometheus is configured to scrape your server, and the "vLLM Server Metrics" dashboard is automatically provisioned.
+- <strong>Auto-Login</strong>: Grafana is launched with anonymous admin access enabled.
+- <strong>Verification</strong>: The tool verifies that the dashboard is correctly registered in the Grafana API before opening your browser.</p>
+<p><strong>Accessing the Dashboard:</strong>
+The tool will automatically open your browser to the metrics dashboard. If you need to access it manually, use:
+<code>http://localhost:3000/d/vllm-metrics</code> (Note: Port may vary if 3000 is in use).</p>
+<h3 id="stop-the-stack">Stop the Stack</h3>
+<pre><code class="language-bash">cmc llm monitor stop-stack
+</code></pre>
+<hr />
+<h2 id="5-lightweight-api-monitoring">5. Lightweight API Monitoring</h2>
+<p>If you don't need a full stack, you can monitor real-time vLLM engine metrics directly in your terminal. For a detailed breakdown of the metrics being tracked, see the <a href="metrics-api.html">vLLM Engine Metrics API Reference</a>.</p>
+<pre><code class="language-bash"># Monitor the default server
+cmc llm monitor llm
+
+# Monitor a specific server
+cmc llm monitor llm my-server-name
+
+# Monitor by local port (even if not in configuration)
+cmc llm monitor llm --port 18222
+
+# Launch a real-time dashboard UI
+cmc llm monitor llm --page
+
+# Change refresh interval (default is 1s)
+cmc llm monitor llm --interval 2
+</code></pre>
+<p><strong>Metrics Tracked:</strong>
+- <strong>Total Tokens</strong>: Combined count of prompt and generation tokens.
+- <strong>Throughput</strong>: Real-time tokens per second (TPS).
+- <strong>Running Requests</strong>: Number of requests currently being processed by the GPU.
+- <strong>Swapped Requests</strong>: Requests currently swapped to CPU memory (indicates VRAM pressure).
+- <strong>GPU KV Cache Usage</strong>: Percentage of the allocated KV cache currently in use.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["content.code.copy"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+    
+  </body>
+</html>

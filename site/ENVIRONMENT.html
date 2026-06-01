@@ -1,0 +1,1667 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+      
+      
+      
+        
+      
+      
+      <link rel="icon" href="assets/theme/favicon.svg">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+    
+    
+      
+        <title>Environment Configuration and Management - Cloudmesh AI Llm</title>
+      
+    
+    
+      <link rel="stylesheet" href="assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="assets/_mkdocstrings.css">
+    
+      <link rel="stylesheet" href="css/custom.css">
+    
+    <script>__md_scope=new URL(".",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="#1e90ff" data-md-color-accent="#1e90ff">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#environment-configuration-and-management" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="index.html" title="Cloudmesh AI Llm" class="md-header__button md-logo" aria-label="Cloudmesh AI Llm" data-md-component="logo">
+      
+  <img src="assets/theme/logo-white.png" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Cloudmesh AI Llm
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Environment Configuration and Management
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="#1e90ff" data-md-color-accent="#1e90ff"  aria-hidden="true"  type="radio" name="__palette" id="__palette_0">
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="#1e90ff" data-md-color-accent="#1e90ff"  aria-hidden="true"  type="radio" name="__palette" id="__palette_1">
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="index.html" title="Cloudmesh AI Llm" class="md-nav__button md-logo" aria-label="Cloudmesh AI Llm" data-md-component="logo">
+      
+  <img src="assets/theme/logo-white.png" alt="logo">
+
+    </a>
+    Cloudmesh AI Llm
+  </label>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="index.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    User Manual
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    User Manual
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="installation.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Installation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="user-manual/starting-services.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Starting AI Services
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="user-manual/monitoring.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Monitoring Services
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Proxy Service
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Proxy Service
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="proxy-service/introduction.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Introduction
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Client Tooling
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Client Tooling
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="client-tools/overview.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Examples
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    API Examples
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="api-samples/python-examples.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Python Samples
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Project
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="CHANGELOG.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Changelog
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="https://github.com/cloudmesh-ai/cloudmesh-ai-llm" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    GitHub
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="https://github.com/cloudmesh-ai/cloudmesh-ai-llm/issues" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Issues
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#user-guide" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        User Guide
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="User Guide">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#quick-start" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Quick Start
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Quick Start">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-setup-your-env-file" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Setup your .env file
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cmc-env-command-reference" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        cmc env Command Reference
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#detailed-usage-examples" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Detailed Usage Examples
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Detailed Usage Examples">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#comparison-and-syncing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Comparison and Syncing
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#security-and-maintenance" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Security and Maintenance
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#content-management" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Content Management
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#technical-developer-guide" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Technical &amp; Developer Guide
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Technical &amp; Developer Guide">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#programming-quickstart" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Programming Quickstart
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Programming Quickstart">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#load-variables-in-python" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Load variables in Python
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#deploy-to-a-remote-server" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Deploy to a remote server
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#configuration-reference" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Configuration Reference
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Configuration Reference">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#environment-variable-table" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Environment Variable Table
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#nested-configuration-double-underscores" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Nested Configuration (Double Underscores)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#internal-architecture" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Internal Architecture
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Internal Architecture">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#system-data-flow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        System Data Flow
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#infrastructure-integration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Infrastructure Integration
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Infrastructure Integration">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#ssh-operations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        SSH Operations
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#docker-integration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Docker Integration
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#best-practices-security" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Best Practices &amp; Security
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#troubleshooting" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Troubleshooting
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#example-workflows" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example Workflows
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Example Workflows">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#workflow-1-local-setup" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Workflow 1: Local Setup
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#workflow-2-multi-environment-deployment" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Workflow 2: Multi-Environment Deployment
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#workflow-3-cicd-integration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Workflow 3: CI/CD Integration
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#summary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Summary
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+
+
+<style>
+.doc-object { 
+    border: 1px solid rgba(0, 0, 0, 0.2) !important; 
+    border-radius: 4px !important; 
+    padding: 0.5rem !important; 
+    margin: 0.5rem 0 !important; 
+    background-color: #ffffff !important;
+}
+
+.doc-object .doc-object {
+    background-color: transparent !important;
+}
+
+[data-md-color-scheme="slate"] .doc-object {
+    border: 1px solid rgba(255, 255, 255, 0.2) !important;
+}
+
+/* Remove width restrictions to allow content to fill available space */
+:root {
+    --md-content-max-width: 100% !important;
+}
+
+.md-content__inner, 
+.md-main__inner,
+.md-grid {
+    max-width: none !important;
+    width: 100% !important;
+}
+
+/* Add breathing room between the middle column and sidebars */
+.md-content__inner {
+    padding-left: 2rem !important;
+    padding-right: 2rem !important;
+}
+</style>
+<h1 id="environment-configuration-and-management">Environment Configuration and Management</h1>
+<p>This manual provides a comprehensive guide to managing environment variables using <code>.env</code> files for <code>cloudmesh-ai-llm</code>. It is designed to serve as both a <strong>User Manual</strong> for daily operations and a <strong>Developer Guide</strong> for technical integration.</p>
+<hr />
+<h2 id="user-guide">User Guide</h2>
+<h3 id="quick-start">Quick Start</h3>
+<p>To get started with environment variables, follow these three simple steps:</p>
+<h4 id="1-setup-your-env-file">1. Setup your <code>.env</code> file</h4>
+<p>Initialize a local <code>.env</code> file with default values:</p>
+<pre><code class="language-bash">cmc env init
+# Edit .env with your actual API keys and settings
+</code></pre>
+<p><strong>Recommended <code>.env</code> Template:</strong></p>
+<pre><code class="language-bash"># VLLM / API Configuration
+VLLM_API_KEY=your_api_key_here
+VLLM_MODEL=gemma
+VLLM_GPU_MEMORY_UTILIZATION=0.9
+VLLM_MAX_MODEL_LEN=4096
+VLLM_TENSOR_PARALLEL_SIZE=1
+VLLM_DTYPE=auto
+
+# Cloudmesh Configuration
+CLOUDMESH_AI_USER=your_username
+CLOUDMESH_AI_HOST=localhost
+CLOUDMESH_AI_PORT=8000
+CLOUDMESH_AI_API_KEY=your_api_key_here
+
+# SSH Configuration (for remote deployments)
+SSH_HOST=your_remote_host
+SSH_USER=your_username
+SSH_KEY_PATH=~/.ssh/id_rsa
+
+# Docker Configuration
+DOCKER_IMAGE=vllm/vllm-openai:latest
+DOCKER_CONTAINER_NAME=vllm-server
+DOCKER_NETWORK=host
+
+# Development
+DEBUG=false
+LOG_LEVEL=INFO
+</code></pre>
+<h3 id="cmc-env-command-reference"><code>cmc env</code> Command Reference</h3>
+<p>The <code>cmc env</code> suite manages <code>.env</code> files across local and remote environments.</p>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Command</th>
+<th style="text-align: left;">Description</th>
+<th style="text-align: left;">Common Flags</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><code>init</code></td>
+<td style="text-align: left;">Initialize default <code>.env</code> file</td>
+<td style="text-align: left;"><code>--path [PATH]</code></td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>probe [HOST]</code></td>
+<td style="text-align: left;">Compare local <code>.env</code> with remote</td>
+<td style="text-align: left;"><code>--format table\|json\|yaml</code></td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>sync HOST</code></td>
+<td style="text-align: left;">Intelligent merge of local into remote</td>
+<td style="text-align: left;"><code>--strategy local_wins\|remote_wins\|ask</code> <code>--dry-run</code></td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>cp HOST</code></td>
+<td style="text-align: left;">Destructive copy local $\rightarrow$ remote</td>
+<td style="text-align: left;"><code>--force</code> <code>--backup</code> <code>--no-backup</code></td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>secure [HOST]</code></td>
+<td style="text-align: left;">Set file permissions to <code>600</code></td>
+<td style="text-align: left;"><em>(None)</em></td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>validate [HOST]</code></td>
+<td style="text-align: left;">Security and permission check</td>
+<td style="text-align: left;"><code>--fix</code></td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>edit [HOST]</code></td>
+<td style="text-align: left;">Interactive edit (downloads $\rightarrow$ edits $\rightarrow$ uploads)</td>
+<td style="text-align: left;"><code>-l [LOCAL_FILE]</code></td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>cat [HOST]</code></td>
+<td style="text-align: left;">Display contents with security warning</td>
+<td style="text-align: left;"><code>-l [LOCAL_FILE]</code></td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>diff HOST</code></td>
+<td style="text-align: left;">Show detailed differences</td>
+<td style="text-align: left;"><code>--show</code> (reveals secrets)</td>
+</tr>
+</tbody>
+</table>
+<h3 id="detailed-usage-examples">Detailed Usage Examples</h3>
+<h4 id="comparison-and-syncing">Comparison and Syncing</h4>
+<pre><code class="language-bash"># Compare local .env with UVA server
+cmc env probe uva
+
+# Preview a sync without applying changes
+cmc env sync uva --dry-run
+
+# Sync with interactive conflict resolution
+cmc env sync uva --strategy ask
+</code></pre>
+<h4 id="security-and-maintenance">Security and Maintenance</h4>
+<pre><code class="language-bash"># Secure local .env file (chmod 600)
+cmc env secure
+
+# Validate remote file and automatically fix permission issues
+cmc env validate uva --fix
+</code></pre>
+<h4 id="content-management">Content Management</h4>
+<pre><code class="language-bash"># Edit remote file using local editor
+cmc env edit uva
+
+# Display remote .env content on uva
+cmc env cat uva
+</code></pre>
+<h2 id="technical-developer-guide">Technical &amp; Developer Guide</h2>
+<h3 id="programming-quickstart">Programming Quickstart</h3>
+<h4 id="load-variables-in-python">Load variables in Python</h4>
+<pre><code class="language-python">from cloudmesh.ai.vllm.config import VLLMConfig
+
+config = VLLMConfig()
+config.merge_env_vars()  # Automatically loads from .env
+</code></pre>
+<h4 id="deploy-to-a-remote-server">Deploy to a remote server</h4>
+<pre><code class="language-python">from cloudmesh.ai.vllm.server_uva import UVAServer
+
+server = UVAServer(host=&quot;uva&quot;)
+server.deploy_with_env(&quot;gemma&quot;, local_env_path=&quot;.env&quot;)
+</code></pre>
+<h3 id="configuration-reference">Configuration Reference</h3>
+<h4 id="environment-variable-table">Environment Variable Table</h4>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Variable</th>
+<th style="text-align: center;">Type</th>
+<th style="text-align: center;">Default</th>
+<th style="text-align: left;">Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><strong>VLLM Configuration</strong></td>
+<td style="text-align: center;"></td>
+<td style="text-align: center;"></td>
+<td style="text-align: left;"></td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>VLLM_API_KEY</code></td>
+<td style="text-align: center;">string</td>
+<td style="text-align: center;">-</td>
+<td style="text-align: left;">Authentication key for vLLM server</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>VLLM_MODEL</code></td>
+<td style="text-align: center;">string</td>
+<td style="text-align: center;">-</td>
+<td style="text-align: left;">Model identifier (e.g., <code>gemma</code>)</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>VLLM_GPU_MEMORY_UTILIZATION</code></td>
+<td style="text-align: center;">float</td>
+<td style="text-align: center;"><code>0.9</code></td>
+<td style="text-align: left;">GPU memory fraction (0.0-1.0)</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>VLLM_MAX_MODEL_LEN</code></td>
+<td style="text-align: center;">int</td>
+<td style="text-align: center;"><code>4096</code></td>
+<td style="text-align: left;">Maximum sequence length</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>VLLM_TENSOR_PARALLEL_SIZE</code></td>
+<td style="text-align: center;">int</td>
+<td style="text-align: center;"><code>1</code></td>
+<td style="text-align: left;">Number of GPUs for parallelism</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>VLLM_DTYPE</code></td>
+<td style="text-align: center;">string</td>
+<td style="text-align: center;"><code>auto</code></td>
+<td style="text-align: left;">Weights data type (<code>float16</code>, <code>bfloat16</code>)</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Cloudmesh Configuration</strong></td>
+<td style="text-align: center;"></td>
+<td style="text-align: center;"></td>
+<td style="text-align: left;"></td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>CLOUDMESH_AI_USER</code></td>
+<td style="text-align: center;">string</td>
+<td style="text-align: center;">-</td>
+<td style="text-align: left;">SSH username</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>CLOUDMESH_AI_HOST</code></td>
+<td style="text-align: center;">string</td>
+<td style="text-align: center;">-</td>
+<td style="text-align: left;">Server hostname/IP</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>CLOUDMESH_AI_PORT</code></td>
+<td style="text-align: center;">int</td>
+<td style="text-align: center;"><code>8000</code></td>
+<td style="text-align: left;">Server port</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>CLOUDMESH_AI_API_KEY</code></td>
+<td style="text-align: center;">string</td>
+<td style="text-align: center;">-</td>
+<td style="text-align: left;">Alternative to <code>VLLM_API_KEY</code></td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>SSH Configuration</strong></td>
+<td style="text-align: center;"></td>
+<td style="text-align: center;"></td>
+<td style="text-align: left;"></td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>SSH_HOST</code></td>
+<td style="text-align: center;">string</td>
+<td style="text-align: center;">-</td>
+<td style="text-align: left;">SSH host alias from <code>~/.ssh/config</code></td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>SSH_USER</code></td>
+<td style="text-align: center;">string</td>
+<td style="text-align: center;">-</td>
+<td style="text-align: left;">SSH username</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>SSH_KEY_PATH</code></td>
+<td style="text-align: center;">string</td>
+<td style="text-align: center;">-</td>
+<td style="text-align: left;">Path to private key</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Docker Configuration</strong></td>
+<td style="text-align: center;"></td>
+<td style="text-align: center;"></td>
+<td style="text-align: left;"></td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>DOCKER_IMAGE</code></td>
+<td style="text-align: center;">string</td>
+<td style="text-align: center;">-</td>
+<td style="text-align: left;">Docker image name</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>DOCKER_CONTAINER_NAME</code></td>
+<td style="text-align: center;">string</td>
+<td style="text-align: center;">-</td>
+<td style="text-align: left;">Container name</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>DOCKER_NETWORK</code></td>
+<td style="text-align: center;">string</td>
+<td style="text-align: center;">-</td>
+<td style="text-align: left;">Network mode</td>
+</tr>
+</tbody>
+</table>
+<h4 id="nested-configuration-double-underscores">Nested Configuration (Double Underscores)</h4>
+<p>Environment variables can override deeply nested YAML configuration paths by replacing dots with double underscores (<code>__</code>).</p>
+<p><strong>Example Mapping:</strong></p>
+<ul>
+<li>
+<p><strong>YAML Path:</strong> <code>cloudmesh.ai.server.uva.gemma.remote_port</code></p>
+</li>
+<li>
+<p><strong>Env Var:</strong> <code>CLOUDMESH_AI_SERVER__UVA__GEMMA__REMOTE_PORT=8001</code></p>
+</li>
+</ul>
+<hr />
+<h3 id="internal-architecture">Internal Architecture</h3>
+<p>The core logic resides in the <code>EnvManager</code> class (<code>src/cloudmesh/ai/vllm/env_manager.py</code>).</p>
+<h4 id="system-data-flow">System Data Flow</h4>
+<p>The following diagram illustrates how the orchestrator connects a remote GPU backend to a local observability stack:</p>
+<pre><code class="language-mermaid">graph LR
+    subgraph &quot;Remote Cloud/HPC&quot;
+        GPU[Remote GPU Node]
+        VLLM[vLLM Server]
+        GPU --&gt; VLLM
+    end
+
+    subgraph &quot;Local Machine&quot;
+        Tunnel[SSH Tunnel]
+        Localhost[Localhost:Port]
+        Prom[Prometheus]
+        Graf[Grafana]
+
+        Tunnel --&gt; Localhost
+        Localhost --&gt; Prom
+        Prom --&gt; Graf
+    end
+
+    VLLM -- &quot;SSH Tunnel&quot; --&gt; Tunnel
+</code></pre>
+<p><strong>Key Operational Workflows:</strong></p>
+<p><strong>Key Operational Workflows:</strong></p>
+<ul>
+<li>
+<p><strong>Intelligent Sync</strong>: Implements a 3-way merge logic to prevent accidental overwrites of remote-only variables.</p>
+</li>
+<li>
+<p><strong>Security Layer</strong>: Every remote write operation automatically triggers a <code>chmod 600</code> to protect secrets.</p>
+</li>
+<li>
+<p><strong>Secret Masking</strong>: The <code>cat</code> and <code>diff</code> commands pass content through a masking filter that replaces sensitive patterns (API keys, tokens) with <code>***</code>.</p>
+</li>
+</ul>
+<h3 id="infrastructure-integration">Infrastructure Integration</h3>
+<h4 id="ssh-operations">SSH Operations</h4>
+<p>Remote management is handled via SCP and SSH. The system checks for file existence and current permissions before attempting modifications to ensure minimal disruption.</p>
+<h4 id="docker-integration">Docker Integration</h4>
+<p>The <code>DockerManager</code> leverages the <code>--env-file</code> flag of the Docker CLI.</p>
+<ul>
+<li>
+<p><strong>Runtime</strong>: <code>docker run --env-file .env ...</code></p>
+</li>
+<li>
+<p><strong>Compose</strong>: <code>docker-compose --env-file .env up</code></p>
+</li>
+<li>
+<p><strong>Generation</strong>: The system can export the current <code>VLLMConfig</code> directly into a Docker-compatible <code>.env</code> file.</p>
+</li>
+</ul>
+<hr />
+<h2 id="best-practices-security">Best Practices &amp; Security</h2>
+<blockquote>
+<p>[!IMPORTANT] <strong>Never commit <code>.env</code> files to version control.</strong> Your <code>.gitignore</code> is pre-configured to exclude all <code>.env*</code> files.</p>
+</blockquote>
+<ul>
+<li><strong>Use Templates</strong>: Always provide a <code>.env.template</code> with dummy values for other developers.</li>
+<li><strong>Permission Strictness</strong>: Always ensure remote <code>.env</code> files are set to <code>600</code>. Use <code>cmc env secure [HOST]</code> to enforce this.</li>
+<li><strong>Environment Separation</strong>: Maintain separate files for different stages:</li>
+<li><code>.env.local</code> $\rightarrow$ Local development</li>
+<li><code>.env.staging</code> $\rightarrow$ Staging server</li>
+<li><code>.env.production</code> $\rightarrow$ Production server</li>
+</ul>
+<hr />
+<h2 id="troubleshooting">Troubleshooting</h2>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Issue</th>
+<th style="text-align: left;">Likely Cause</th>
+<th style="text-align: left;">Solution</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><code>ImportError: python-dotenv</code></td>
+<td style="text-align: left;">Missing dependency</td>
+<td style="text-align: left;"><code>pip install --force-reinstall cloudmesh-ai-llm</code></td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>FileNotFoundError: .env</code></td>
+<td style="text-align: left;">Missing file</td>
+<td style="text-align: left;"><code>cp .env.template .env</code></td>
+</tr>
+<tr>
+<td style="text-align: left;">Config not overriding YAML</td>
+<td style="text-align: left;">Case mismatch or missing call</td>
+<td style="text-align: left;">Ensure <code>config.merge_env_vars()</code> is called after initialization.</td>
+</tr>
+<tr>
+<td style="text-align: left;">Remote upload fails</td>
+<td style="text-align: left;">SSH Connectivity</td>
+<td style="text-align: left;">Verify access: <code>ssh user@remote "echo 'SSH works'"</code></td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="example-workflows">Example Workflows</h2>
+<h3 id="workflow-1-local-setup">Workflow 1: Local Setup</h3>
+<pre><code class="language-bash">cp .env.template .env
+# Edit .env with your keys
+python -c &quot;from cloudmesh.ai.vllm.config import VLLMConfig; c=VLLMConfig(); c.merge_env_vars(); print(c.get('cloudmesh.ai.model'))&quot;
+</code></pre>
+<h3 id="workflow-2-multi-environment-deployment">Workflow 2: Multi-Environment Deployment</h3>
+<pre><code class="language-python"># deploy.py
+import sys
+from cloudmesh.ai.vllm.server_uva import UVAServer
+
+env = sys.argv[1] # 'staging' or 'production'
+server = UVAServer(host=f&quot;uva-{env}&quot;)
+server.deploy_with_env(&quot;gemma&quot;, local_env_path=f&quot;.env.{env}&quot;)
+</code></pre>
+<h3 id="workflow-3-cicd-integration">Workflow 3: CI/CD Integration</h3>
+<p>In GitHub Actions, use secrets to generate the file on the fly:</p>
+<pre><code class="language-yaml">- name: Create .env file
+  run: |
+    echo &quot;VLLM_API_KEY=${{ secrets.VLLM_API_KEY }}&quot; &gt;&gt; .env
+    echo &quot;VLLM_MODEL=${{ vars.VLLM_MODEL }}&quot; &gt;&gt; .env
+</code></pre>
+<hr />
+<h2 id="summary">Summary</h2>
+<p>The environment system provides a secure, flexible bridge between local development and remote deployment:</p>
+<ol>
+<li><strong>Local</strong>: Easy YAML overrides.</li>
+<li><strong>Remote</strong>: Automatic SSH/SCP sync.</li>
+<li><strong>Docker</strong>: Native environment file support.</li>
+<li><strong>Security</strong>: Secret masking and forced permissions.</li>
+</ol>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": ".", "features": ["content.code.copy"], "search": "assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+    
+  </body>
+</html>

@@ -1,0 +1,1302 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+      
+      
+      
+        
+      
+      
+      <link rel="icon" href="assets/theme/favicon.svg">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+    
+    
+      
+        <title>Deep Dive: Cline Setup & Configuration Management - Cloudmesh AI Llm</title>
+      
+    
+    
+      <link rel="stylesheet" href="assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="assets/_mkdocstrings.css">
+    
+      <link rel="stylesheet" href="css/custom.css">
+    
+    <script>__md_scope=new URL(".",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="#1e90ff" data-md-color-accent="#1e90ff">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#deep-dive-cline-setup-configuration-management" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="index.html" title="Cloudmesh AI Llm" class="md-header__button md-logo" aria-label="Cloudmesh AI Llm" data-md-component="logo">
+      
+  <img src="assets/theme/logo-white.png" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Cloudmesh AI Llm
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Deep Dive: Cline Setup &amp; Configuration Management
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="#1e90ff" data-md-color-accent="#1e90ff"  aria-hidden="true"  type="radio" name="__palette" id="__palette_0">
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="#1e90ff" data-md-color-accent="#1e90ff"  aria-hidden="true"  type="radio" name="__palette" id="__palette_1">
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="index.html" title="Cloudmesh AI Llm" class="md-nav__button md-logo" aria-label="Cloudmesh AI Llm" data-md-component="logo">
+      
+  <img src="assets/theme/logo-white.png" alt="logo">
+
+    </a>
+    Cloudmesh AI Llm
+  </label>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="index.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    User Manual
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    User Manual
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="installation.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Installation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="user-manual/starting-services.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Starting AI Services
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="user-manual/monitoring.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Monitoring Services
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Proxy Service
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Proxy Service
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="proxy-service/introduction.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Introduction
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Client Tooling
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Client Tooling
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="client-tools/overview.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Examples
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    API Examples
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="api-samples/python-examples.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Python Samples
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Project
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="CHANGELOG.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Changelog
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="https://github.com/cloudmesh-ai/cloudmesh-ai-llm" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    GitHub
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="https://github.com/cloudmesh-ai/cloudmesh-ai-llm/issues" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Issues
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#overview" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Overview
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Overview">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-plan-vs-act-paradigm" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The "Plan" vs "Act" Paradigm
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#setup-configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Setup &amp; Configuration
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Setup &amp; Configuration">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-profile-based-model-synchronization" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Profile-based Model Synchronization
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="1. Profile-based Model Synchronization">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#parameters" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Parameters:
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#logic" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Logic:
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#safety-backups" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Safety &amp; Backups:
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#example" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example:
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#command-summary-table" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Command Summary Table
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-general-configuration-management" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. General Configuration Management
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="2. General Configuration Management">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#list-all-configurations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        List All Configurations
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#retrieve-a-specific-value" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Retrieve a Specific Value
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#set-a-configuration-value" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Set a Configuration Value
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#edit-configuration-file" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Edit Configuration File
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-secrets-management" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Secrets Management
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="3. Secrets Management">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#set-a-secret" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Set a Secret
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-a-secret" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Get a Secret
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#technical-details" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Technical Details
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Technical Details">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#integration-with-llmyaml" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Integration with llm.yaml
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#file-paths" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        File Paths
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+
+
+<style>
+.doc-object { 
+    border: 1px solid rgba(0, 0, 0, 0.2) !important; 
+    border-radius: 4px !important; 
+    padding: 0.5rem !important; 
+    margin: 0.5rem 0 !important; 
+    background-color: #ffffff !important;
+}
+
+.doc-object .doc-object {
+    background-color: transparent !important;
+}
+
+[data-md-color-scheme="slate"] .doc-object {
+    border: 1px solid rgba(255, 255, 255, 0.2) !important;
+}
+
+/* Remove width restrictions to allow content to fill available space */
+:root {
+    --md-content-max-width: 100% !important;
+}
+
+.md-content__inner, 
+.md-main__inner,
+.md-grid {
+    max-width: none !important;
+    width: 100% !important;
+}
+
+/* Add breathing room between the middle column and sidebars */
+.md-content__inner {
+    padding-left: 2rem !important;
+    padding-right: 2rem !important;
+}
+</style>
+<h1 id="deep-dive-cline-setup-configuration-management">Deep Dive: Cline Setup &amp; Configuration Management</h1>
+<p>The <code>cmc llm cline</code> command suite provides a powerful interface for managing the configuration of the Cline AI agent. Instead of manually editing JSON files in hidden directories, you can use these commands to synchronize your LLM profiles from <code>llm.yaml</code> directly into Cline's settings.</p>
+<h2 id="overview">Overview</h2>
+<p>Cline is an AI-powered software engineering agent that integrates directly into VS Code. To maximize its effectiveness, it requires precise configuration of the LLMs used for different stages of its workflow.</p>
+<h3 id="the-plan-vs-act-paradigm">The "Plan" vs "Act" Paradigm</h3>
+<p>Cline operates in two distinct modes:
+- <strong>Plan Mode</strong>: Used for analyzing requirements, architecting solutions, and creating a roadmap. This typically requires a model with strong reasoning and high-context windows.
+- <strong>Act Mode</strong>: Used for implementing the plan, writing code, and executing CLI commands. This requires a model that is precise, follows instructions strictly, and is efficient.</p>
+<p>Cline stores its configuration in two primary files located in <code>~/.cline/data</code>:
+- <code>globalState.json</code>: Contains general settings, including the active model, API base URLs, and extension state.
+- <code>secrets.json</code>: Stores sensitive information like API keys.</p>
+<p>This command suite allows you to manage both files safely, with built-in backup mechanisms and profile resolution.</p>
+<h2 id="setup-configuration">Setup &amp; Configuration</h2>
+<h3 id="1-profile-based-model-synchronization">1. Profile-based Model Synchronization</h3>
+<p>The most powerful feature is the ability to set Cline's "Plan" and "Act" models based on a profile defined in your global <code>llm.yaml</code> configuration.</p>
+<pre><code class="language-bash">cmc llm cline &lt;profile&gt; [--plan &lt;model&gt;] [--act &lt;model&gt;]
+</code></pre>
+<h4 id="parameters">Parameters:</h4>
+<ul>
+<li><code>&lt;profile&gt;</code>: The name of the profile in <code>llm.yaml</code> (e.g., <code>uva.gemma</code>). The command extracts the <code>model</code> and <code>apiBase</code> from this profile.</li>
+<li><code>--plan &lt;model&gt;</code>: (Optional) Overrides the model used for the "Plan" mode.</li>
+<li><code>--act &lt;model&gt;</code>: (Optional) Overrides the model used for the "Act" mode.</li>
+</ul>
+<h4 id="logic">Logic:</h4>
+<ul>
+<li>If neither <code>--plan</code> nor <code>--act</code> is provided, both are set to the model defined in the specified profile.</li>
+<li>The command identifies the <code>openAiBaseUrl</code> from the profile's <code>apiBase</code>.</li>
+<li><strong>Interactive Confirmation</strong>: Before any changes are applied, the command prints a "Proposed Changes" summary (e.g., <code>planModeOpenAiModelId: old-model</code> $\rightarrow$ <code>new-model</code>). You must confirm with <code>y</code> to apply the changes.</li>
+</ul>
+<h4 id="safety-backups">Safety &amp; Backups:</h4>
+<p>Before modifying <code>globalState.json</code>, the command creates an incremental backup using the <code>backup_name</code> utility. 
+- Example backup files: <code>globalState.json.bak.1</code>, <code>globalState.json.bak.2</code>, etc.
+- This ensures you can always revert to a previous state if a configuration change causes issues.</p>
+<h4 id="example">Example:</h4>
+<p>Set both plan and act models to the <code>uva.gemma</code> profile:</p>
+<pre><code class="language-bash">cmc llm cline uva.gemma
+</code></pre>
+<p>Set a specific model for acting while using the <code>uva.gemma</code> profile for planning:</p>
+<pre><code class="language-bash">cmc llm cline uva.gemma --act gemma-2-9b
+</code></pre>
+<p><strong>Pro Tip:</strong> For the best experience, use a larger model (like <code>uva.gemma2</code> or a 27B+ model) for <code>--plan</code> and a faster, more concise model for <code>--act</code>.</p>
+<h3 id="command-summary-table">Command Summary Table</h3>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Command / Option</th>
+<th style="text-align: left;">Description</th>
+<th style="text-align: left;">Example</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><code>&lt;profile&gt;</code></td>
+<td style="text-align: left;">Sync plan/act models from <code>llm.yaml</code> profile</td>
+<td style="text-align: left;"><code>cmc llm cline uva.gemma</code></td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>--plan &lt;model&gt;</code></td>
+<td style="text-align: left;">Override the planning model</td>
+<td style="text-align: left;"><code>--plan gemma-2-27b</code></td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>--act &lt;model&gt;</code></td>
+<td style="text-align: left;">Override the acting model</td>
+<td style="text-align: left;"><code>--act gemma-2-9b</code></td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>list</code></td>
+<td style="text-align: left;">List all values in <code>globalState.json</code></td>
+<td style="text-align: left;"><code>cmc llm cline list</code></td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>probe</code></td>
+<td style="text-align: left;">Show key values set via the GUI</td>
+<td style="text-align: left;"><code>cmc llm cline probe</code></td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>get &lt;key&gt;</code></td>
+<td style="text-align: left;">Retrieve a specific config value</td>
+<td style="text-align: left;"><code>cmc llm cline get planMode...</code></td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>set &lt;key&gt; &lt;val&gt;</code></td>
+<td style="text-align: left;">Update a specific config value</td>
+<td style="text-align: left;"><code>cmc llm cline set theme dark</code></td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>edit</code></td>
+<td style="text-align: left;">Open <code>globalState.json</code> in default editor</td>
+<td style="text-align: left;"><code>cmc llm cline edit</code></td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>secrets set</code></td>
+<td style="text-align: left;">Securely save a value in <code>secrets.json</code></td>
+<td style="text-align: left;"><code>cmc llm cline secrets set api_key ...</code></td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>secrets get</code></td>
+<td style="text-align: left;">Retrieve a value from <code>secrets.json</code></td>
+<td style="text-align: left;"><code>cmc llm cline secrets get api_key</code></td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h3 id="2-general-configuration-management">2. General Configuration Management</h3>
+<p>You can perform granular operations on the <code>globalState.json</code> file.</p>
+<h4 id="list-all-configurations">List All Configurations</h4>
+<p>View all current settings in <code>globalState.json</code>.</p>
+<pre><code class="language-bash">cmc llm cline list
+</code></pre>
+<h4 id="retrieve-a-specific-value">Retrieve a Specific Value</h4>
+<p>Get the value of a specific key from the configuration.</p>
+<pre><code class="language-bash">cmc llm cline get &lt;key&gt;
+</code></pre>
+<p><em>Example:</em> <code>cmc llm cline get planModeOpenAiModelId</code></p>
+<h4 id="set-a-configuration-value">Set a Configuration Value</h4>
+<p>Update or create a setting in the global state.</p>
+<pre><code class="language-bash">cmc llm cline set &lt;key&gt; &lt;value&gt;
+</code></pre>
+<p><em>Example:</em> <code>cmc llm cline set someSetting true</code></p>
+<h4 id="edit-configuration-file">Edit Configuration File</h4>
+<p>Open the <code>globalState.json</code> file directly in your system's default text editor for complex edits.</p>
+<pre><code class="language-bash">cmc llm cline edit
+</code></pre>
+<hr />
+<h3 id="3-secrets-management">3. Secrets Management</h3>
+<p>Manage sensitive API keys and tokens stored in <code>secrets.json</code>.</p>
+<h4 id="set-a-secret">Set a Secret</h4>
+<p>Securely add or update a secret.</p>
+<pre><code class="language-bash">cmc llm cline secrets set &lt;key&gt; &lt;value&gt;
+</code></pre>
+<h4 id="get-a-secret">Get a Secret</h4>
+<p>Retrieve the value of a specific secret.</p>
+<pre><code class="language-bash">cmc llm cline secrets get &lt;key&gt;
+</code></pre>
+<h2 id="technical-details">Technical Details</h2>
+<h3 id="integration-with-llmyaml">Integration with <code>llm.yaml</code></h3>
+<p>The command leverages the <code>VLLMConfig</code> class to resolve profiles. It looks for the profile in the standard Cloudmesh LLM configuration path (usually <code>~/.config/cloudmesh/llm.yaml</code>).</p>
+<h3 id="file-paths">File Paths</h3>
+<ul>
+<li><strong>Config Directory</strong>: <code>~/.cline/data</code></li>
+<li><strong>Global State</strong>: <code>~/.cline/data/globalState.json</code></li>
+<li><strong>Secrets</strong>: <code>~/.cline/data/secrets.json</code></li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": ".", "features": ["content.code.copy"], "search": "assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+    
+  </body>
+</html>
