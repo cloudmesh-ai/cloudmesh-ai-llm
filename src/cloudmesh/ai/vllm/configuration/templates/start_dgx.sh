@@ -10,7 +10,7 @@ VLLM_API_KEY=$(cat ../server_master_key.txt)
 # Optimized Docker Run
 docker run --gpus '"device=0,1"' \
   --shm-size 16gb \
-  -v ~/.cache/huggingface:/root/.cache/huggingface \
+  -v {cache_dir}:/root/.cache/huggingface \
   -p 127.0.0.1:8000:8000 \
   -e HF_TOKEN="${HF_TOKEN}" \
   -e VLLM_API_KEY="${VLLM_API_KEY}" \

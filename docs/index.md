@@ -4,11 +4,11 @@ Welcome to the Cloudmesh AI LLM documentation. This project provides an orchestr
 
 ## Overview
 
-Cloudmesh AI simplifies the complexity of managing remote GPU nodes, SSH tunneling, and API compatibility. Whether you are deploying on a single RTX 3090 or a massive NVIDIA Spark cluster, our tools provide a consistent interface to start, monitor, and connect to your AI models.
+Cloudmesh AI simplifies the complexity of managing remote GPU nodes, SSH tunneling, and API compatibility. Whether you are deploying on a single RTX 3090, a NVIDIA SPark,  or a massive NVIDIA cluster, the Cloudmesh AI LLM tools provide a consistent interface to start, monitor, and connect to your AI models.
 
 ## Quick Start Guide
 
-If you are new to Cloudmesh AI, we recommend following this path to get your first model running and monitored:
+If you are new to Cloudmesh AI LLM, we recommend following this path to get your first model running and monitored:
 
 ### 1. Core Setup
 - **[Installation](./installation.md)**: Set up the package and configure your SSH access.

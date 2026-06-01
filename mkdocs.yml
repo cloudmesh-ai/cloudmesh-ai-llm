@@ -6,6 +6,7 @@ nav:
 - User Manual:
   - Installation: installation.md
   - Starting AI Services: user-manual/starting-services.md
+  - Monitoring Services: user-manual/monitoring.md
 - Proxy Service:
   - Introduction: proxy-service/introduction.md
 - Client Tooling:

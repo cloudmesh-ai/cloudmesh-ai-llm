@@ -68,17 +68,25 @@ def status(ctx, name):
             table = Table(title="vLLM Server Status", show_header=True, header_style="bold magenta")
             table.add_column("Server", style="cyan")
             table.add_column("Job ID", style="dim")
+            table.add_column("Job Name", style="dim")
             table.add_column("Health", justify="center")
             table.add_column("Node", style="dim")
+            table.add_column("GPUs", justify="center")
             table.add_column("Port", justify="right")
             table.add_column("Tunnel", justify="center")
+            table.add_column("Start", justify="center")
+            table.add_column("TTL", justify="center")
 
             for server_info in running:
                 sname = server_info["server"]
                 jid = server_info["job_id"]
+                jname_slurm = server_info.get("job_name", "Unknown")
                 node = server_info["node"]
+                gpus = server_info.get("gpus", "Unknown")
                 remote_port = server_info["port"]
                 local_port = server_info["local_port"]
+                start = server_info.get("start", "Unknown")
+                ttl = server_info.get("ttl", "Unknown")
                 
                 # Resolve health via local tunnel (127.0.0.1)
                 try:
@@ -103,7 +111,7 @@ def status(ctx, name):
                 except Exception:
                     pass
 
-                table.add_row(sname, str(jid), health_fmt, node, f"{local_port}:{remote_port}", tunnel_status)
+                table.add_row(sname, str(jid), jname_slurm, health_fmt, node, str(gpus), f"{local_port}:{remote_port}", tunnel_status, start, ttl)
 
             console.print("\n")
             console.print(table)

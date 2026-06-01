@@ -42,8 +42,6 @@
 
 - [ ] **Interactive Configuration**: Implement a guided interactive wizard for initial setup of `llm.yaml`.
   - The `cmc llm configure` command is basic; a wizard would help users set up their first server without needing to look at the YAML schema.
-- [x] **Better Status Visualization**: Enhance `cmc llm status` with `rich` tables showing real-time health and allocated nodes.
-  - Show real-time health, tunnel status, and the allocated node at a glance.
 - [ ] **Wait-for-Ready Indicators**: Add visual spinners/progress bars while polling for model loading.
   - Make the wait feel shorter and more informative during the model loading phase.
 
@@ -72,43 +70,4 @@
 - [ ] **Expanded API Examples**: Add diverse Python/Node.js implementation examples in `docs/api-samples/`.
   - Show how to use the orchestrator's backends in real-world applications with multiple language examples.
 
-## Documentation UX Polish
-
-Align documentation with recent UI/UX enhancements to ensure users can leverage new visual features.
-
-- [x] **Update `monitoring.md`**: Document the new Rich Summary Table for `cmc llm status`, including color-coded health and allocated node info.
-- [x] **Update `starting-services.md`**: Document the new visual loading indicators (spinners/progress) and update the validation workflow to prioritize `cmc llm status`.
-
-## Documentation Overhaul (Completed)
-
-Transform the documentation into a comprehensive User Manual focusing on practical deployment and usage.
-
-### 1. User Manual: Starting AI Services
-
-- [x] Overview of the `cmc llm start` command.
-- [x] Guide to starting `uva.gemma` and `uva.gemma2`.
-- [x] Hardware-Specific Deployment (RTX 3090, NVIDIA Spark).
-- [x] Validation & Testing (Curl and Built-in tests).
-- [x] Integration of `cmc llm template` command.
-
-### 2. The Proxy Service
-
-- [x] Introduction to the Proxy Service and architecture.
-- [x] Using backends via Proxy.
-- [x] Guide on accessing special models (e.g., `uva kimmi`).
-
-### 3. Client Tooling & Integration
-
-- [x] Client Ecosystem Overview.
-- [x] Deep Dive: Cline Setup (CLI, Model Selection, Configuration).
-
-### 4. API Sample Programs
-
-- [x] Python Client Examples (Chat completion, Streaming).
-- [x] Advanced Integration (Timeouts, Retries).
-
-### 5. Observability & Support (Added)
-
-- [x] Full Observability Stack guide (`monitor stack`).
-- [x] Comprehensive Troubleshooting Guide.
-- [x] vLLM Engine Metrics API reference.
+##

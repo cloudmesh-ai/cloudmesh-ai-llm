@@ -533,6 +533,45 @@ class VLLMOrchestrator:
             console.error(f"Failed to stop UVA server: {e}")
             return False
 
+    def _parse_slurm_duration(self, duration_str):
+        """Parse Slurm duration string [days-]HH:MM:SS into seconds."""
+        if not duration_str or duration_str in ["N/A", "Unknown", "UNLIMITED"]:
+            return 0
+        try:
+            days = 0
+            if "-" in duration_str:
+                days_str, duration_str = duration_str.split("-", 1)
+                days = int(days_str)
+
+            parts = list(map(int, duration_str.split(":")))
+            if len(parts) == 3:  # HH:MM:SS
+                return days * 86400 + parts[0] * 3600 + parts[1] * 60 + parts[2]
+            elif len(parts) == 2:  # MM:SS
+                return days * 86400 + parts[0] * 60 + parts[1]
+            return days * 86400
+        except Exception:
+            return 0
+
+    def _format_hhmm(self, seconds):
+        """Format seconds into HH:MM."""
+        if seconds <= 0:
+            return "00:00"
+        hours = int(seconds // 3600)
+        minutes = int((seconds % 3600) // 60)
+        return f"{hours:02d}:{minutes:02d}"
+
+    def _format_start_time(self, time_str):
+        """Extract HH:MM from Slurm start time YYYY-MM-DDTHH:MM:SS."""
+        if not time_str or time_str in ["N/A", "Unknown"]:
+            return "Unknown"
+        if "T" in time_str:
+            try:
+                time_part = time_str.split("T")[1]
+                return ":".join(time_part.split(":")[:2])
+            except Exception:
+                pass
+        return time_str
+
     def list_running_servers(self, quiet=False):
         """List all running vLLM servers on UVA."""
         if not quiet:
@@ -656,13 +695,59 @@ class VLLMOrchestrator:
                         }
                         self._save_state(state)
 
+                # Calculate Start Time and TTL in HH:MM format
+                start_raw = job.get("start_time", "Unknown")
+                limit_raw = job.get("time_limit", "Unknown")
+                used_raw = job.get("time_used", "00:00")
+                gres_raw = job.get("gres", "Unknown")
+
+                start_fmt = self._format_start_time(start_raw)
+
+                limit_sec = self._parse_slurm_duration(limit_raw)
+                used_sec = self._parse_slurm_duration(used_raw)
+                ttl_sec = max(0, limit_sec - used_sec)
+                ttl_fmt = self._format_hhmm(ttl_sec)
+
+                # Extract GPU count from GRES
+                # GRES e.g.: gres/gpu:a100:4, gpu:1
+                gpus = "0"
+                gres_raw = job.get("gres", "")
+                
+                # Check GRES first
+                if gres_raw and "gpu" in gres_raw.lower():
+                    match = re.search(r'gpu[:\w]*:(\d+)', gres_raw.lower())
+                    if match:
+                        gpus = match.group(1)
+
+                # Fallback to scontrol if GRES didn't work (for jobs using --gpus)
+                if gpus == "0":
+                    try:
+                        # Query scontrol for the specific job to get TRES data
+                        # We use -o for one-line format to make parsing easier
+                        s_cmd = f"ssh uva 'scontrol show job {job_id} -o'"
+                        s_res = subprocess.run(s_cmd, shell=True, capture_output=True, text=True, timeout=5)
+                        if s_res.returncode == 0:
+                            # Look for AllocTRES or ReqTRES
+                            # Example: AllocTRES=cpu=32,mem=64G,node=1,billing=32,gres/gpu=4
+                            s_output = s_res.stdout.lower()
+                            # Match gres/gpu=N or gres/gpu:N
+                            match = re.search(r'gpu[=\:](\d+)', s_output)
+                            if match:
+                                gpus = match.group(1)
+                    except Exception:
+                        pass
+
                 running_jobs.append(
                     {
                         "server": server_name,
                         "job_id": job_id,
+                        "job_name": job_name,
                         "node": node,
                         "port": remote_port,
                         "local_port": local_port,
+                        "start": start_fmt,
+                        "ttl": ttl_fmt,
+                        "gpus": gpus,
                     }
                 )
 
@@ -673,9 +758,10 @@ class VLLMOrchestrator:
 
             # Print as a table if not quiet
             if not quiet:
-                headers = ["Server", "Job ID", "Node", "Port"]
+                # Align with requested headers: Server, Job ID, Health, Node, Port, Tunnel, Start, TTL
+                headers = ["Server", "Job ID", "Health", "Node", "Port", "Tunnel", "Start", "TTL"]
                 data = [
-                    [j["server"], j["job_id"], j["node"], j["port"]]
+                    [j["server"], j["job_id"], "N/A", j["node"], j["port"], "N/A", j["start"], j["ttl"]]
                     for j in running_jobs
                 ]
                 console.print_table(headers, data)
@@ -1157,10 +1243,15 @@ class VLLMOrchestrator:
                 custom_cmd = self.server_config.get("tunnel")
                 if custom_cmd:
                     custom_cmd = custom_cmd.replace("{local_port}", str(self.server_config['remote_port'])).replace("{remote_port}", str(self.server_config['remote_port']))
+                elif self.server_config.get("launch_mode") == "sbatch" and dest_host:
+                    # Fallback tunnel if no custom tunnel is defined for sbatch
+                    lp = self.server_config['remote_port']
+                    rp = self.server_config['remote_port']
+                    custom_cmd = f"lsof -ti:{lp} | xargs kill -9 && ssh -L {lp}:{dest_host}:{rp} uva -N"
                 
                 success, msg = tunnel_manager.start_tunnel(
                     target_host, 
-                    self.server_config["remote_port"], 
+                    self.server_config['remote_port'], 
                     dest_host=dest_host, 
                     custom_command=custom_cmd
                 )
@@ -1381,6 +1472,9 @@ class VLLMOrchestrator:
                     custom_cmd = self.server_config.get("tunnel")
                     if custom_cmd:
                         custom_cmd = custom_cmd.replace("{local_port}", str(local_port)).replace("{remote_port}", str(remote_port))
+                    elif self.server_config.get("launch_mode") == "sbatch" and node_name:
+                        # Fallback tunnel if no custom tunnel is defined for sbatch
+                        custom_cmd = f"lsof -ti:{local_port} | xargs kill -9 && ssh -L {local_port}:{node_name}:{remote_port} uva -N"
                     
                     success, msg = tunnel_manager.start_tunnel(
                         "uva", 

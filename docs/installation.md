@@ -4,9 +4,16 @@ This guide will walk you through installing the Cloudmesh AI LLM package and con
 
 ## System Prerequisites
 
-Before installing the Python packages, ensure you have the necessary system tools installed for VPN and tunnel connectivity.
+!!! attention
+    The current version does require cloudmesh-ai-vpn. We may change this in future 
+    if ther eis demand for not using it.
 
-### OpenConnect
+    Many institutions provide a institutional VPN which you can probably use. If you prefer using your own vpn connection programs, let us know and we integrate an option for it.
+    However, in many cases you will probably can use our VPN connection strategy.
+    
+Before installing the Python packages, ensure you have the necessary system tools installed for VPN and tunnel connectivity.   The  Cloudmesh VPN, documentation is available at <https://cloudmesh-ai.github.io/cloudmesh-ai-vpn/> if you need more details, such as creating a setup for your organization. 
+
+### OpenConnect 
 The `cloudmesh-ai-vpn` package requires the `openconnect` binary to establish VPN connections.
 
 **macOS (via Homebrew):**
@@ -29,7 +36,7 @@ choco install openconnect
 
 ### Via PyPI
 
-!!! warning
+!!! attention
     Currently, the package is not yet deployed to PyPI, but once available you can install it using:
 
 ```bash

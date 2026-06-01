@@ -15,12 +15,18 @@ class Server(ABC):
     Abstract base class for vLLM server implementations.
     """
 
+    def log_debug(self, msg: str):
+        """Print debug message to console if debug mode is enabled."""
+        from cloudmesh.ai.common.io import console
+        if self.debug:
+            console.print(f"[dim]DEBUG: {msg}[/dim]")
+
     def __init__(self, host: str, db=None, launch_mode: str = "remote", debug: bool = False):
         self.host = host
         self.debug = debug
         self.logger = logging.getLogger(self.__class__.__name__)
         self.launch_mode = launch_mode  # "local" or "remote"
-        
+
         if db:
             # If db is a callable (mock), wrap it in a DotDict proxy to avoid TypeError
             if callable(db):
@@ -170,9 +176,9 @@ class Server(ABC):
         """
         if self.debug:
             if self.launch_mode == "local":
-                console.print(f"[dim]DEBUG (SSH/CMD): {cmd}[/dim]")
+                self.log_debug(f"(SSH/CMD): {cmd}")
             else:
-                console.print(f"[dim]DEBUG (SSH/CMD): ssh {self.host} '{cmd}'[/dim]")
+                self.log_debug(f"(SSH/CMD): ssh {self.host} '{cmd}'")
 
         if self.launch_mode == "local":
             self.logger.debug(f"[LOCAL] {cmd}")
@@ -200,8 +206,7 @@ class Server(ABC):
             self._execute(f"mkdir -p {dir_path}")
             
             ssh_cmd = ["ssh", self.host, f"cat << 'EOF' > {path}\n{content}\nEOF"]
-            if self.debug:
-                console.print(f"[dim]DEBUG (SSH/CMD): {' '.join(ssh_cmd)}[/dim]")
+            self.log_debug(f"(SSH/CMD): {' '.join(ssh_cmd)}")
             subprocess.run(ssh_cmd, capture_output=True, text=True, check=True)
             self._execute(f"chmod +x {path}")
             self.logger.debug(f"[REMOTE:{self.host}] Script uploaded to {path}")
