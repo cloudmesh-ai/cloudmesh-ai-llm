@@ -5,13 +5,13 @@ This guide will walk you through installing the Cloudmesh AI LLM package and con
 ## System Prerequisites
 
 !!! attention
-    The current version does require cloudmesh-ai-vpn. We may change this in future 
-    if ther eis demand for not using it.
+    The current version requires cloudmesh-ai-vpn. We may change this in the future 
+    if there is demand for not using it.
 
-    Many institutions provide a institutional VPN which you can probably use. If you prefer using your own vpn connection programs, let us know and we integrate an option for it.
-    However, in many cases you will probably can use our VPN connection strategy.
+    Many institutions provide an institutional VPN which you can probably use. If you prefer using your own VPN connection tools, let us know and we will integrate an option for it.
+    However, in many cases, you can probably use our VPN connection strategy.
     
-Before installing the Python packages, ensure you have the necessary system tools installed for VPN and tunnel connectivity.   The  Cloudmesh VPN, documentation is available at <https://cloudmesh-ai.github.io/cloudmesh-ai-vpn/> if you need more details, such as creating a setup for your organization. 
+Before installing the Python packages, ensure you have the necessary system tools installed for VPN and tunnel connectivity. Cloudmesh VPN documentation is available at <https://cloudmesh-ai.github.io/cloudmesh-ai-vpn/> if you need more details, such as creating a setup for your organization. 
 
 ### OpenConnect 
 The `cloudmesh-ai-vpn` package requires the `openconnect` binary to establish VPN connections.
@@ -70,7 +70,7 @@ cd ..
 
 This configuration is essential for the `cmc llm start` command to successfully orchestrate remote deployments.
 
-To simplify connecting to your GPU nodes we use the 
+To simplify connecting to your GPU nodes, we use the 
 `.ssh/config` file. This allows you to use short names like `ssh uva` instead of typing the full IP address and username every time.
 Add the following to your `~/.ssh/config` (replacing the placeholders with your actual server details):
 
