@@ -18,6 +18,7 @@ from cloudmesh.ai.vllm.client import VLLMClient
 from cloudmesh.ai.vllm.server_uva import ServerUVA
 from cloudmesh.ai.vllm.server_dgx import ServerDGX
 from cloudmesh.ai.vllm.squeue import SQueue
+from cloudmesh.ai.vllm.tunnel import tunnel_manager
 
 # from cloudmesh.ai.vpn.vpn import Vpn
 
@@ -194,6 +195,22 @@ class VLLMOrchestrator:
         mem = config.get("mem", "96gb")
         image = vllm_image or "{VLLM_IMAGE}"
 
+        # Allow override from config
+        custom_script = config.get("submit_script")
+        if custom_script:
+            self.log_debug(f"Using custom submit_script from config for {server_name}")
+            
+            # Create a mapping of all available config attributes + dynamic ones
+            replacements = {k: str(v) for k, v in config.items()}
+            replacements["VLLM_IMAGE"] = str(image)
+            
+            # Replace all {key} placeholders found in the script
+            resolved_script = custom_script
+            for key, value in replacements.items():
+                resolved_script = resolved_script.replace(f"{{{key}}}", value)
+            
+            return resolved_script
+
         return textwrap.dedent(f"""\
             #!/bin/bash
             #SBATCH --job-name={job_name}
@@ -288,6 +305,31 @@ class VLLMOrchestrator:
             self.log_debug(f"Cleared local port {port} using aggressive kill.")
         except Exception as e:
             console.warning(f"Could not kill process on port {port}: {e}")
+
+    def _establish_tunnel(self, node_name: str, local_port: int, remote_port: int):
+        """Establishes the SSH tunnel based on config or fallback."""
+        from cloudmesh.ai.vllm.tunnel import tunnel_manager
+        
+        host = self.server_config.get("host", "uva")
+        custom_cmd = self.server_config.get("tunnel")
+        
+        if custom_cmd:
+            resolved_cmd = custom_cmd.replace("{local_port}", str(local_port)).replace("{remote_port}", str(remote_port))
+            self.log_debug(f"Starting tunnel with custom command: {resolved_cmd}")
+        elif self.server_config.get("launch_mode") == "sbatch" and node_name:
+            # Fallback tunnel for sbatch
+            resolved_cmd = f"lsof -ti:{local_port} | xargs kill -9 && ssh -L {local_port}:{node_name}:{remote_port} uva -N"
+            self.log_debug(f"Starting tunnel with fallback command: {resolved_cmd}")
+        else:
+            resolved_cmd = None
+
+        success, msg = tunnel_manager.start_tunnel(
+            host,
+            local_port,
+            dest_host=node_name,
+            custom_command=resolved_cmd,
+        )
+        return success, msg
 
     def export_scripts(self, server_name: str, destination: str = "."):
         """Export launch scripts to a local directory for customization."""
@@ -712,10 +754,10 @@ class VLLMOrchestrator:
                 # GRES e.g.: gres/gpu:a100:4, gpu:1
                 gpus = "0"
                 gres_raw = job.get("gres", "")
-                
+
                 # Check GRES first
                 if gres_raw and "gpu" in gres_raw.lower():
-                    match = re.search(r'gpu[:\w]*:(\d+)', gres_raw.lower())
+                    match = re.search(r"gpu[:\w]*:(\d+)", gres_raw.lower())
                     if match:
                         gpus = match.group(1)
 
@@ -725,13 +767,15 @@ class VLLMOrchestrator:
                         # Query scontrol for the specific job to get TRES data
                         # We use -o for one-line format to make parsing easier
                         s_cmd = f"ssh uva 'scontrol show job {job_id} -o'"
-                        s_res = subprocess.run(s_cmd, shell=True, capture_output=True, text=True, timeout=5)
+                        s_res = subprocess.run(
+                            s_cmd, shell=True, capture_output=True, text=True, timeout=5
+                        )
                         if s_res.returncode == 0:
                             # Look for AllocTRES or ReqTRES
                             # Example: AllocTRES=cpu=32,mem=64G,node=1,billing=32,gres/gpu=4
                             s_output = s_res.stdout.lower()
                             # Match gres/gpu=N or gres/gpu:N
-                            match = re.search(r'gpu[=\:](\d+)', s_output)
+                            match = re.search(r"gpu[=\:](\d+)", s_output)
                             if match:
                                 gpus = match.group(1)
                     except Exception:
@@ -759,12 +803,30 @@ class VLLMOrchestrator:
             # Print as a table if not quiet
             if not quiet:
                 # Align with requested headers: Server, Job ID, Health, Node, Port, Tunnel, Start, TTL
-                headers = ["Server", "Job ID", "Health", "Node", "Port", "Tunnel", "Start", "TTL"]
+                headers = [
+                    "Server",
+                    "Job ID",
+                    "Health",
+                    "Node",
+                    "Port",
+                    "Tunnel",
+                    "Start",
+                    "TTL",
+                ]
                 data = [
-                    [j["server"], j["job_id"], "N/A", j["node"], j["port"], "N/A", j["start"], j["ttl"]]
+                    [
+                        j["server"],
+                        j["job_id"],
+                        "N/A",
+                        j["node"],
+                        j["port"],
+                        "N/A",
+                        j["start"],
+                        j["ttl"],
+                    ]
                     for j in running_jobs
                 ]
-                console.print_table(headers, data)
+                console.print_table(headers, data, column_align={2: "center", 5: "center"})
 
             return running_jobs
 
@@ -784,7 +846,8 @@ class VLLMOrchestrator:
 
         remote_port = config.get("remote_port", 8000)
         job_name = config.get("name")
-        remote_dir = config.get("dir")
+        # Use remote_dir if provided, otherwise fall back to dir
+        remote_dir = config.get("remote_dir") or config.get("dir")
 
         # Debug print of the resolved config
         self.log_debug(f"Resolved config for {server_name}:")
@@ -854,6 +917,45 @@ class VLLMOrchestrator:
                 check=True,
             )
             console.ok(f"Successfully uploaded {script_name} to {remote_dir}")
+
+            # 1b. Optional File Copy (Deployment)
+            copy_cfg = config.get("copy")
+            if copy_cfg:
+                console.banner("Copying Additional Files")
+                # Handle both single copy object and list of copy objects
+                copies = copy_cfg if isinstance(copy_cfg, list) else [copy_cfg]
+                for item in copies:
+                    src = item.get("src")
+                    dst = item.get("dst")
+                    if src and dst:
+                        # Resolve src path relative to the cloudmesh package root
+                        # orchestrator.py is at .../cloudmesh/ai/vllm/orchestrator.py
+                        # package_root (the 'cloudmesh' folder) is 2 levels up
+                        package_root = Path(__file__).resolve().parents[2]
+                        
+                        if "cloudmesh/" in src:
+                            # Extract path from 'cloudmesh/' onwards
+                            rel_path = src.split("cloudmesh/", 1)[1]
+                            # Join with the parent of the cloudmesh folder
+                            abs_src = str(package_root.parent / f"cloudmesh/{rel_path}")
+                        else:
+                            abs_src = os.path.abspath(src)
+
+                        if not os.path.exists(abs_src):
+                            self.log_debug(f"Source file not found at {abs_src}")
+                        
+                        # Resolve placeholders in dst, especially {remote_dir}
+                        resolved_dst = dst.replace("{remote_dir}", remote_dir).replace("{user}", config.get("user", ""))
+                        self.log_debug(f"Copying {abs_src} to uva:{resolved_dst}")
+                        try:
+                            subprocess.run(
+                                f"scp -q {abs_src} uva:{resolved_dst}",
+                                shell=True,
+                                check=True,
+                            )
+                            console.ok(f"Copied {src} -> {resolved_dst}")
+                        except subprocess.CalledProcessError as e:
+                            console.error(f"Failed to copy {src} to {resolved_dst}: {e}")
 
             # 2. Allocation
             console.banner("Allocation")
@@ -1216,56 +1318,29 @@ class VLLMOrchestrator:
         # 1. Initial Health Check
         console.banner("Initial Health Check")
         console.print("[blue]Checking if vLLM server is already available...[/blue]")
+        # Verify the server is actually healthy, not just that a stale tunnel exists
         if client.is_alive():
-            console.ok("vLLM server is already ALIVE and tunneled!")
-            StopWatch.stop("vllm_startup")
-            console.print(
-                f"[dim]Total startup time: {StopWatch.get('vllm_startup'):.2f}s[/dim]"
-            )
-            StopWatch.benchmark()
-            return True
-
-            # If not alive locally, try to establish tunnel first in case it's alive remotely
-            if target_host not in ["localhost", "127.0.0.1"]:
-                from cloudmesh.ai.vllm.tunnel import tunnel_manager
-
-                # Try to resolve the actual compute node for the tunnel destination
-                dest_host = None
-                job_info = self.resolve_job_by_port(self.server_config["remote_port"])
-                if job_info:
-                    dest_host = job_info.get("node_name")
-
-                console.print(
-                    f"[blue]Attempting to establish tunnel to {target_host}:{dest_host or '127.0.0.1'}:{self.server_config['remote_port']}...[/blue]"
-                )
-                self._kill_port_process(self.server_config["remote_port"])
-                
-                custom_cmd = self.server_config.get("tunnel")
-                if custom_cmd:
-                    custom_cmd = custom_cmd.replace("{local_port}", str(self.server_config['remote_port'])).replace("{remote_port}", str(self.server_config['remote_port']))
-                elif self.server_config.get("launch_mode") == "sbatch" and dest_host:
-                    # Fallback tunnel if no custom tunnel is defined for sbatch
-                    lp = self.server_config['remote_port']
-                    rp = self.server_config['remote_port']
-                    custom_cmd = f"lsof -ti:{lp} | xargs kill -9 && ssh -L {lp}:{dest_host}:{rp} uva -N"
-                
-                success, msg = tunnel_manager.start_tunnel(
-                    target_host, 
-                    self.server_config['remote_port'], 
-                    dest_host=dest_host, 
-                    custom_command=custom_cmd
-                )
-                if success or msg == "Tunnel already active":
-                    # Re-check health after tunneling
-                    if client.is_alive():
-                        console.ok("vLLM server is now ALIVE via tunnel!")
-                        StopWatch.stop("vllm_startup")
-                        StopWatch.benchmark()
-                        return True
+            # To ensure it's not a stale tunnel, we do a quick health check via the client
+            try:
+                if client.is_healthy():
+                    console.ok("vLLM server is already ALIVE and healthy!")
+                    StopWatch.stop("vllm_startup")
+                    console.print(
+                        f"[dim]Total startup time: {StopWatch.get('vllm_startup'):.2f}s[/dim]"
+                    )
+                    StopWatch.benchmark()
+                    return True
+            except Exception:
+                console.warning("Local port is open, but server is not responding. Treating as dead.")
 
         # 2. Platform-specific Launch
         with StopWatch.timer("platform_launch"):
             console.banner("Platform Launch")
+            
+            # Kill local port immediately upon starting a new server launch
+            local_port = port_override or config.get("local_port", 8000)
+            self._kill_port_process(local_port)
+            
             process = None
             launch_mode = config.get("launch_mode", "ijob")
 
@@ -1284,19 +1359,8 @@ class VLLMOrchestrator:
                     )
                     return False
             else:
-                # Default flow: Tunnel then Start (ijob)
+                # Default flow: Start then Tunnel (ijob)
                 if target_host not in ["localhost", "127.0.0.1"]:
-                    server.tunnel(name)
-
-                    if client.is_alive():
-                        console.ok("vLLM server is now available!")
-                        StopWatch.stop("vllm_startup")
-                        console.print(
-                            f"[dim]Total startup time: {StopWatch.get('vllm_startup'):.2f}s[/dim]"
-                        )
-                        StopWatch.benchmark()
-                        return True
-
                     console.print("[blue]Starting vLLM server on remote host...[/blue]")
                     server.start(name)
                 else:
@@ -1466,22 +1530,7 @@ class VLLMOrchestrator:
                     console.print(
                         f"[blue]Server is healthy. Establishing tunnel to {node_name}...[/blue]"
                     )
-                    self._kill_port_process(local_port)
-                    from cloudmesh.ai.vllm.tunnel import tunnel_manager
-                    
-                    custom_cmd = self.server_config.get("tunnel")
-                    if custom_cmd:
-                        custom_cmd = custom_cmd.replace("{local_port}", str(local_port)).replace("{remote_port}", str(remote_port))
-                    elif self.server_config.get("launch_mode") == "sbatch" and node_name:
-                        # Fallback tunnel if no custom tunnel is defined for sbatch
-                        custom_cmd = f"lsof -ti:{local_port} | xargs kill -9 && ssh -L {local_port}:{node_name}:{remote_port} uva -N"
-                    
-                    success, msg = tunnel_manager.start_tunnel(
-                        "uva", 
-                        local_port, 
-                        dest_host=node_name, 
-                        custom_command=custom_cmd
-                    )
+                    success, msg = self._establish_tunnel(node_name, local_port, remote_port)
                     if success or msg == "Tunnel already active":
                         console.ok("Tunnel established in background.")
                     else:

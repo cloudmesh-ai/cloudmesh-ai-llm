@@ -1,0 +1,15 @@
+Bootstrap: docker
+From: python:3.11-slim
+
+%post
+    apt-get update && apt-get install -y --no-install-recommends \
+        build-essential && rm -rf /var/lib/apt/lists/*
+    pip install --no-cache-dir fastapi uvicorn pydantic
+
+%files
+    # Copy your specific file into the container
+    mock_server.py /app/mock_server.py
+
+%runscript
+    # "$@" passes your command line arguments (like --port) to the script
+    python3 /app/mock_server.py "$@"

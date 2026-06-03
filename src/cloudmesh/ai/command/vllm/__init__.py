@@ -1,6 +1,7 @@
 import click
 from cloudmesh.ai.command.cline import cline_group
 from cloudmesh.ai.command.continue_cmd import continue_group
+from cloudmesh.ai.command.mock import mock_group
 
 from cloudmesh.ai.command.vllm.lifecycle import start, stop, kill
 from cloudmesh.ai.command.vllm.config import (
@@ -61,3 +62,4 @@ def register(cli=None, **kwargs):
             llm_group()
         return
     cli.add_command(llm_group, name="llm")
+    cli.add_command(mock_group, name="mock")

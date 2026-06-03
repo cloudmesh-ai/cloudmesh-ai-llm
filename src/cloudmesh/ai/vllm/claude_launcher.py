@@ -1,7 +1,6 @@
 import os
 import subprocess
 from cloudmesh.ai.vllm.config import VLLMConfig
-from yamldb import YamlDB
 from cloudmesh.ai.common import banner
 from cloudmesh.ai.common.io import console
 

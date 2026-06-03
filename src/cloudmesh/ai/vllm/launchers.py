@@ -3,11 +3,11 @@ import subprocess
 import textwrap
 import urllib.request
 import time
-from cloudmesh.ai.common import banner
+import yaml
+from cloudmesh.ai.common import banner, DotDict
 from cloudmesh.ai.common.io import console
 from cloudmesh.ai.common.sys import os_is_mac
 from cloudmesh.ai.vllm.config import VLLMConfig
-from yamldb import YamlDB
 
 
 class DockerManager:
@@ -70,11 +70,13 @@ class WebUILauncher:
 
     def __init__(self):
         self.docker = DockerManager()
-        # Use YamlDB to load the resolved configuration in memory
-        self.db = YamlDB(
-            filename=VLLMConfig.DEFAULT_USER_CONFIG_PATH,
-            backend=":memory:",
-        )
+        # Load the resolved configuration into a DotDict
+        config_path = VLLMConfig.DEFAULT_USER_CONFIG_PATH
+        if os.path.exists(config_path):
+            with open(config_path, "r") as f:
+                self.db = DotDict(yaml.safe_load(f) or {})
+        else:
+            self.db = DotDict()
         self.container_name = "open-webui"
         self.local_tunnel_port = 8001
         self.image = "ghcr.io/open-webui/open-webui:main"

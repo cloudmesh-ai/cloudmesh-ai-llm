@@ -138,6 +138,9 @@ cloudmesh:
           local_port: 18123
           remote_port: 18123
           user: '{~/.ssh/config:uva.user}'
+          tunnel: |
+            lsof -ti:{local_port} | xargs kill -9
+            ssh -L {local_port}:udc-an26-1:{remote_port} uva -N
           shell: /bin/bash
           script: |
             export HF_TOKEN=$(cat $HOME/.config/cloudmesh/llm/HF_token.txt)
@@ -178,6 +181,9 @@ cloudmesh:
           local_port: 18123
           remote_port: 18123
           user: '{~/.ssh/config:uva.user}'
+          tunnel: |
+            lsof -ti:{local_port} | xargs kill -9
+            ssh -L {local_port}:udc-an26-1:{remote_port} uva -N
           shell: /bin/bash
           script: |
             export HF_TOKEN=$(cat $HOME/.config/cloudmesh/llm/HF_token.txt)
@@ -219,6 +225,9 @@ cloudmesh:
           local_port: 18125
           remote_port: 18125
           user: '{~/.ssh/config:uva.user}'
+          tunnel: |
+            lsof -ti:{local_port} | xargs kill -9
+            ssh -L {local_port}:udc-an26-1:{remote_port} uva -N
 
         deepseek:
           max_model_len: 32768
@@ -249,7 +258,51 @@ cloudmesh:
           local_port: 18126
           remote_port: 18126
           user: '{~/.ssh/config:uva.user}'
+          tunnel: |
+            lsof -ti:{local_port} | xargs kill -9
+            ssh -L {local_port}:udc-an26-1:{remote_port} uva -N
 
+        mock:
+          image: "/scratch/{user}/mock/mock.sif"
+          launch_mode: "sbatch"
+          account: "bii_dsc_community"
+          partition: "bii-gpu"
+          reservation: "bi_fox_dgx"
+          cpus: 2
+          gpus: 1
+          mem: "32G"
+          host: "uva"
+          user: '{~/.ssh/config:uva.user}'
+          remote_dir: "/scratch/{user}/cloudmesh/mock"
+          copy:
+            src: "cloudmesh-ai-llm/src/cloudmesh/ai/mock/mock_server.py"
+            dst: "{remote_dir}/mock_server.py"
+          tunnel: |
+            lsof -ti:{local_port} | xargs kill -9
+            ssh -L {local_port}:udc-an26-1:{remote_port} uva -N
+          submit_script: |
+            #!/bin/bash
+            #SBATCH --job-name=vllm_mock_{remote_port}
+            #SBATCH --partition={partition}
+            #SBATCH --reservation={reservation}
+            #SBATCH --account={account}
+            #SBATCH --gres=gpu:a100:{gpus}
+            #SBATCH --cpus-per-task={cpus}
+            #SBATCH --mem={mem}
+            #SBATCH --time=03:00:00
+            #SBATCH --output={remote_dir}/vllm_mock_{remote_port}.out
+            #SBATCH --error={remote_dir}/vllm_mock_{remote_port}.err
+            
+            cd {remote_dir}
+            ls -la
+            bash start_uva.sh
+          script: |
+            module load apptainer
+            apptainer run --nv \
+              -B {remote_dir}:/app \
+              -W /app \
+              {image} \
+              --port {remote_port}
       dgx:
         local-gemma-2:
           gpus: 2

@@ -11,12 +11,13 @@ nav:
   - Introduction: proxy-service/introduction.md
 - Client Tooling:
   - Overview: client-tools/overview.md
-- API Examples:
+- Developers Manual:
   - Python Samples: api-samples/python-examples.md
-- Project:
-  - Changelog: CHANGELOG.md
-  - GitHub: https://github.com/cloudmesh-ai/cloudmesh-ai-llm
-  - Issues: https://github.com/cloudmesh-ai/cloudmesh-ai-llm/issues
+  - Mock Service: developers-manual/mock-vllm-service.md 
+  - Project:
+    - Changelog: CHANGELOG.md
+    - GitHub: https://github.com/cloudmesh-ai/cloudmesh-ai-llm
+    - Issues: https://github.com/cloudmesh-ai/cloudmesh-ai-llm/issues
 plugins:
 - cloudmesh-ai-theme
 - search
