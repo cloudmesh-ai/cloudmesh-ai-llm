@@ -123,4 +123,9 @@ cloudmesh:
 
 The location of the mock service is in 
 
-cloudmesh-ai-llm/src/cloudmesh
+- The command: <https://github.com/cloudmesh-ai/cloudmesh-ai-llm/blob/main/src/cloudmesh/ai/command/mock.py>
+- The logic dir: <https://github.com/cloudmesh-ai/cloudmesh-ai-llm/tree/main/src/cloudmesh/ai/mock> with 
+    - [Makefile](https://github.com/cloudmesh-ai/cloudmesh-ai-llm/blob/main/src/cloudmesh/ai/mock/Makefile)
+    - Aptainer def file [mock.def](https://github.com/cloudmesh-ai/cloudmesh-ai-llm/blob/main/src/cloudmesh/ai/mock/mock.def)
+    - The server: [mockerver.py](https://github.com/cloudmesh-ai/cloudmesh-ai-llm/blob/main/src/cloudmesh/ai/mock/mock_server.py)
+  
