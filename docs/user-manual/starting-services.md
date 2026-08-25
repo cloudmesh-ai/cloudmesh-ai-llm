@@ -4,10 +4,8 @@
 
 If you are a UVA user and want to get a model running immediately, use the following command:
 
-``` bash
-# Start the standard Gemma model
-cmc llm start uva.gemma
-```
+    # Start the standard Gemma model
+    cmc llm start uva.gemma
 
 ------------------------------------------------------------------------
 
@@ -82,9 +80,9 @@ cloudmesh:
 If you need to change vLLM arguments (e.g., `--gpu-memory-utilization` or `--max-model-len`) that are not covered by the standard YAML config, you can customize the launch scripts directly.
 
 1.  **Export the scripts**:
-    ```bash
-    cmc llm start uva.gemma --export
-    ```
+
+      cmc llm start uva.gemma --export
+
     This saves the `start_uva.sh` and configuration files to your current local directory.
 
 2.  **Edit the script**:
@@ -92,10 +90,9 @@ If you need to change vLLM arguments (e.g., `--gpu-memory-utilization` or `--max
 
 3.  **Launch**:
     Run the start command again. The orchestrator will detect your local modified script and upload it to the remote node instead of using the default template.
-    ```bash
-    cmc llm start uva.gemma
-    ```
-
+  
+      cmc llm start uva.gemma
+    
 ---
 
 1.  **Connects**: It sets up a secure "tunnel" so your laptop can talk to the remote GPU as if it were running locally.
@@ -114,13 +111,11 @@ We provide two main versions of the Gemma model on the UVA infrastructure:
 
 To launch your chosen model, run:
 
-``` bash
-# For the standard version:
-cmc llm start uva.gemma
+  # For the standard version:
+  cmc llm start uva.gemma
 
-# For the high-performance version:
-cmc llm start uva.gemma2
-```
+  # For the high-performance version:
+  cmc llm start uva.gemma2
 
 ### Configuration Templates
 
@@ -128,15 +123,11 @@ To avoid manual editing of `~/.config/cloudmesh/llm.yaml`, you can use pre-defin
 
 **1. List available templates:**
 
-``` bash
-cmc llm template
-```
+  cmc llm template
 
 **2. Apply a template:**
 
-``` bash
-cmc llm template gemma
-```
+  cmc llm template gemma
 
 This command merges the template settings into your configuration file while preserving your existing user-specific settings (like SSH keys or custom ports).
 
@@ -163,10 +154,8 @@ For deployments on single RTX 3090 cards, focus on memory utilization and quanti
 
 - **Launch Command**:
 
-  ``` bash
-  cmc llm start my-rtx3090-server
-  ```
-
+        cmc llm start my-rtx3090-server
+  
 ### NVIDIA Spark (Cluster/HPC)
 
 When deploying on NVIDIA Spark clusters or high-performance computing environments:
@@ -177,10 +166,8 @@ When deploying on NVIDIA Spark clusters or high-performance computing environmen
 
 - **Launch Command**:
 
-  ``` bash
-  cmc llm start spark-cluster-node
-  ```
-
+        cmc llm start spark-cluster-node
+  
 ## Validation & Testing
 
 Once the service is reported as "Ready", you should verify the API is functioning correctly.
@@ -191,20 +178,16 @@ Use these commands from your local machine (where the tunnel is active).
 
 **1. Verify Models Endpoint** Check if the vLLM server is listing the loaded model:
 
-``` bash
-curl http://localhost:8000/v1/models
-```
+      curl http://localhost:8000/v1/models
 
 **2. Send a Completion Request** Test a simple prompt to ensure the model generates text:
 
-``` bash
-curl http://localhost:8000/v1/chat/completions \
-  -H "Content-Type: application/json" \
-  -d '{
-    "model": "google/gemma-2b-it",
-    "messages": [{"role": "user", "content": "Hello, who are you?"}]
-  }'
-```
+      curl http://localhost:8000/v1/chat/completions \
+        -H "Content-Type: application/json" \
+        -d '{
+          "model": "google/gemma-2b-it",
+          "messages": [{"role": "user", "content": "Hello, who are you?"}]
+      }'
 
 
 ------------------------------------------------------------------------

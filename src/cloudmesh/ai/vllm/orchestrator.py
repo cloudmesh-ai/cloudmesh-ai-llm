@@ -193,6 +193,7 @@ class VLLMOrchestrator:
         email = config.get("email", "thf2bn@virginia.edu")
         gpus = config.get("gpus", "4")
         mem = config.get("mem", "96gb")
+        duration = config.get("time", "03:00:00")
         image = vllm_image or "{VLLM_IMAGE}"
 
         # Allow override from config
@@ -222,7 +223,7 @@ class VLLMOrchestrator:
             #SBATCH --gres=gpu:a100:{gpus}
             #SBATCH --cpus-per-task=32
             #SBATCH --mem={mem}
-            #SBATCH --time=03:00:00
+            #SBATCH --time={duration}
             #SBATCH --output={remote_dir}/{job_name}.out
             #SBATCH --error={remote_dir}/{job_name}.err
 

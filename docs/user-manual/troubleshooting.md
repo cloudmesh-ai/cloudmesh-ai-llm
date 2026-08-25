@@ -6,9 +6,7 @@ This guide provides solutions to the most common issues encountered when deployi
 
 Before diving into specific errors, the first step in troubleshooting should always be to check the overall health of your services. The `cmc llm status` command provides a high-level summary of all active instances, their health, and their node allocations.
 
-```bash
-cmc llm status
-```
+  cmc llm status
 
 **Example Output:**
 
@@ -30,26 +28,32 @@ cmc llm status
 
 If you can access the Grafana UI but the "vLLM Server Metrics" dashboard is missing:
 
-*   **Cause**: This is typically caused by stale provisioning state in the Grafana internal database or a mismatch between the provider config and the JSON file location.
-*   **Solution**: Stop the stack and remove all associated Docker volumes to ensure a clean state:
-  ```bash
-  cmc llm monitor stop-stack
-  # If problems persist, manually prune volumes:
-  docker volume prune
-  ```
-  Then, relaunch using `cmc llm monitor stack`. The tool now performs automated API verification to ensure the dashboard is registered.
+*  **Cause**: This is typically caused by stale provisioning state in the Grafana internal database or a mismatch between the provider config and the JSON file location.
+*  **Solution**: Stop the stack and remove all associated Docker volumes to ensure a clean state:
+
+        cmc llm monitor stop-stack
+        # If problems persist, manually prune volumes:
+        docker volume prune
+
+  Then, relaunch using 
+  
+      cmc llm monitor stack
+      
+  The tool now performs automated API verification to ensure the dashboard is registered.
 
 ### "No data" in the dashboard panels
 
 If the dashboard loads but the charts are empty:
 
-*   **Check Metrics Endpoint**: Verify that vLLM is actually exporting metrics. Run:
-  ```bash
-  curl http://localhost:<your-port>/metrics
-  ```
+*  **Check Metrics Endpoint**: Verify that vLLM is actually exporting metrics. Run:
+  
+        curl http://localhost:<your-port>/metrics
+  
   You should see a long list of text starting with `# HELP`.
-*   **Network Resolution**: On macOS, Docker containers must use `host.docker.internal` to reach the host. The orchestrator configures this automatically, but ensure your Docker Desktop version is up to date.
-*   **Prometheus Target**: Check the Prometheus UI (`http://localhost:9090`) &rarr; **Status** &rarr; **Targets**. If the vLLM target is `DOWN`, the issue is network connectivity between the container and the host.
+
+*  **Network Resolution**: On macOS, Docker containers must use `host.docker.internal` to reach the host. The orchestrator configures this automatically, but ensure your Docker Desktop version is up to date.
+
+*  **Prometheus Target**: Check the Prometheus UI (`http://localhost:9090`) &rarr; **Status** &rarr; **Targets**. If the vLLM target is `DOWN`, the issue is network connectivity between the container and the host.
 
 ### Grafana UI is unreachable (Connection Refused)
 
@@ -64,9 +68,9 @@ If the dashboard loads but the charts are empty:
 
 *   **VPN Check**: Ensure you are connected to the UVA or DGX VPN.
 *   **SSH Key**: Verify that your SSH key is added to the `ssh-agent`:
-  ```bash
-  ssh-add -l
-  ```
+
+        ssh-add -l
+
 *   **Host Verification**: Try connecting to the remote node manually via SSH to ensure there are no fingerprint prompts blocking the automated tunnel.
 
 ### "Port already in use"
@@ -74,10 +78,9 @@ If the dashboard loads but the charts are empty:
 If you are running multiple models or have a stale tunnel:
 
 *   **Solution**: Use the `--port` flag to specify a unique local and remote port:
-  ```bash
-  cmc llm start my-server --port 18222
-  ```
-
+  
+        cmc llm start my-server --port 18222
+  
 ---
 
 ## 3. vLLM Engine & Model Errors
@@ -105,20 +108,20 @@ If the automated `cmc llm start` pipeline fails, you can manually recover your s
 
 1.  **Manually Request Allocation**:
     Request a GPU node via the cluster scheduler (e.g., UVA Rivanna):
-    ```bash
-    ssh -tt uva "/opt/rci/bin/ijob -A bii_dsc_community -p bii-gpu --gres=gpu:a100:4"
-    ```
+
+        ssh -tt uva "/opt/rci/bin/ijob -A bii_dsc_community -p bii-gpu --gres=gpu:a100:4"
+    
 2.  **Manual Launch**:
     Once on the node, navigate to your scratch directory and run your launch script:
-    ```bash
-    cd /scratch/${USER}
-    ./gemma.sh
-    ```
+    
+        cd /scratch/${USER}
+        ./gemma.sh
+    
 3.  **Manual Tunneling**:
     From your **local machine**, establish the SSH tunnel using the allocated `<node-id>`:
-    ```bash
-    ssh -L 8000:<node-id>:8000 ${USER}@rivanna.itc.virginia.edu
-    ```
+    
+        ssh -L 8000:<node-id>:8000 ${USER}@rivanna.itc.virginia.edu
+    
 4.  **Sync State**:
     Once manually running, you can use `cmc llm status` to verify the endpoint is reachable.
 
@@ -126,7 +129,10 @@ If the automated `cmc llm start` pipeline fails, you can manually recover your s
 
 If the `start` command hangs during "Waiting for allocation":
 
-*   **Queue Status**: Check the Slurm queue manually using `squeue -u <your-user>`.
+*   **Queue Status**: Check the Slurm queue manually using 
+
+        squeue -u <your-user>
+        
 *   **Request Size**: If the cluster is full, try requesting fewer GPUs or a different partition.
 
 ### VPN Disconnection

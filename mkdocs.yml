@@ -4,9 +4,10 @@ extra_css:
 nav:
 - Home: index.md
 - User Manual:
-  - Installation: installation.md
+  - Installation: user-manual/installation.md
   - Starting AI Services: user-manual/starting-services.md
   - Monitoring Services: user-manual/monitoring.md
+  - Troubleshouting: user-manual/troubleshooting.md
 - Proxy Service:
   - Introduction: proxy-service/introduction.md
 - Client Tooling:
@@ -39,7 +40,14 @@ plugins:
 site_name: Cloudmesh AI Llm
 theme:
   name: material
+  features:
+    # - content.code.annotate # Optional
+    # Add this to hide the language labels
+    - content.code.copy
+
 use_directory_urls: false
 
 markdown_extensions:
   - admonition
+  - pymdownx.tabbed:
+      alternate_style: true

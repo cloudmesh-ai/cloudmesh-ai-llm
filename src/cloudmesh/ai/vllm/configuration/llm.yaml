@@ -163,6 +163,7 @@ cloudmesh:
 
         gemma:
           max_model_len: 131072
+          time: "04:00:00"
           name: "vllm_gemma_{remote_port}"
           launch_mode: "sbatch"
           account: "bii_dsc_community"
@@ -201,6 +202,7 @@ cloudmesh:
                --max-model-len {max_model_len} \
                --enable-prefix-caching \
               --load-format safetensors \
+              --enable-auto-tool-choice \
               --tool-call-parser gemma4 \
               --host 0.0.0.0 \
               --port {remote_port}
