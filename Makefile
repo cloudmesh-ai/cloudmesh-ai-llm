@@ -102,3 +102,15 @@ view:
 	lsof -ti:8000 | xargs kill -9
 	$(PIP) install -e ../cloudmesh-ai-theme
 	mkdocs serve --livereload
+
+
+sif:
+	echo "execute the following commands individually"
+    echo "srun --partition=gpu --gres=gpu:1 --mem=32G --time=06:00:00 --pty bash"
+	echo "module load apptainer"
+	@echo -n \
+		"export APPTAINER_CACHEDIR=/tmp/apptainer-cache\n" \
+		"export APPTAINER_TMPDIR=/scratch/$USER/apptainer-tmp\n" \
+		"mkdir -p $$APPTAINER_TMPDIR\n" \
+		"apptainer build vllm_gemma4.sif docker://vllm/vllm-openai:gemma4\n"
+	
