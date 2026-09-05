@@ -7,7 +7,7 @@ cloudmesh:
           account: "bii_dsc_community"
           partition: "bii-gpu"
           reservation: "bi_fox_dgx"
-          cpus: 4
+          cpus: 16
           gpus: 4
           gres: "gpu:a100:{gpus}"
           tensor_parallel_size: "{gpus}"
@@ -28,7 +28,7 @@ cloudmesh:
           launch_mode: "sbatch"
           account: "bii_dsc_community"
           partition: "bii-gpu"
-          cpus: 2
+          cpus: 16
           gpus: 1
           gres: "gpu:a100:{gpus}"
           tensor_parallel_size: "{gpus}"
@@ -49,7 +49,7 @@ cloudmesh:
           launch_mode: "sbatch"
           account: "bii_dsc_community"
           partition: "bii-gpu"
-          cpus: 4
+          cpus: 16
           gpus: 4
           gres: "gpu:a100:{gpus}"
           tensor_parallel_size: "{gpus}"
@@ -71,7 +71,7 @@ cloudmesh:
           account: "bii_dsc_community"
           partition: "bii-gpu"
           reservation: "bi_fox_dgx"
-          cpus: 4
+          cpus: 16
           gpus: 4
           gres: "gpu:a100:{gpus}"
           tensor_parallel_size: "{gpus}"
@@ -94,7 +94,7 @@ cloudmesh:
           account: "bii_dsc_community"
           partition: "bii-gpu"
           reservation: "bi_fox_dgx"
-          cpus: 4
+          cpus: 16
           gpus: 4
           gres: "gpu:a100:{gpus}"
           tensor_parallel_size: "{gpus}"
@@ -125,7 +125,7 @@ cloudmesh:
           account: "bii_dsc_community"
           partition: "bii-gpu"
           reservation: "bi_fox_dgx"
-          cpus: 2
+          cpus: 16
           gpus: 2
           gres: "gpu:a100:{gpus}"
           tensor_parallel_size: "{gpus}"
@@ -155,9 +155,11 @@ cloudmesh:
               --model {model} \
               --tensor-parallel-size {tensor_parallel_size} \
               --gpu-memory-utilization 0.85 \
-                --max-model-len {max_model_len} \
-               --enable-prefix-caching \
+              --max-model-len {max_model_len} \
+              --enable-auto-tool-choice \
+              --enable-prefix-caching \
               --load-format safetensors \
+              --tool-call-parser gemma4 \
               --host 0.0.0.0 \
               --port {remote_port}
 
@@ -169,7 +171,7 @@ cloudmesh:
           account: "bii_dsc_community"
           partition: "bii-gpu"
           reservation: "bi_fox_dgx"
-          cpus: 4
+          cpus: 16
           gpus: 4
           gres: "gpu:a100:{gpus}"
           tensor_parallel_size: "{gpus}"
@@ -212,7 +214,7 @@ cloudmesh:
           account: "bii_dsc_community"
           partition: "bii-gpu"
           reservation: "bi_fox_dgx"
-          cpus: 4
+          cpus: 16
           gpus: 4
           gres: "gpu:a100:{gpus}"
           tensor_parallel_size: "{gpus}"
@@ -238,7 +240,7 @@ cloudmesh:
           account: "bii_dsc_community"
           partition: "bii-gpu"
           reservation: "bi_fox_dgx"
-          cpus: 4
+          cpus: 16
           gpus: 4
           gres: "gpu:a100:{gpus}"
           tensor_parallel_size: "{gpus}"

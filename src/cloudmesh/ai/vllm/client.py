@@ -92,10 +92,36 @@ class VLLMClient:
                 console.print(f"[dim]Health check unexpected error: {e}[/dim]")
             return "OFFLINE"
 
-    def is_alive(self):
-        """Backward compatibility: check if the server is READY."""
-        return self.get_status() == "READY"
+    # -----------------------------------------------------------------
+    # Ollama specific cheap health check
+    # -----------------------------------------------------------------
+    def _ollama_is_alive(self) -> bool:
+        """
+        Ollama does not implement ``/health``; a 200 on ``/v1/models`` is enough.
+        """
+        try:
+            r = requests.get(f"http://{self.host}:{self.port}/v1/models", timeout=3)
+            return r.status_code == 200
+        except Exception:
+            return False
 
+    # -----------------------------------------------------------------
+    # Override the generic ``is_alive`` to auto‑detect the backend type
+    # -----------------------------------------------------------------
+    def is_alive(self) -> bool:
+        """
+        Detect backend type (vLLM vs Ollama) and run the proper check.
+        """
+        # The orchestrator stores the backend type in the config under
+        # ``cloudmesh.ai.server.<name>.type``.  If that entry is missing we
+        # assume the classic vLLM behaviour.
+        backend_type = self.config.get("cloudmesh.ai.server.type")
+        if backend_type == "ollama":
+            return self._ollama_is_alive()
+        # fallback to the original logic (vLLM)
+        return self.get_status() == "READY"
+        #return super().is_alive()
+    
     def get_models(self):
         """
         Retrieve the list of models available on the vLLM server.

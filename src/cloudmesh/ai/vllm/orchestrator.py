@@ -110,34 +110,58 @@ def get_default_host(db=None):
         return None
 
 
+#def get_server(host, db=None, server_name=None, launch_mode=None):
+#    """
+#    Helper to instantiate the correct server class based on host.
+#
+#    Args:
+#       host: The hostname (e.g., 'dgx', 'uva')
+#        db: Optional pre-loaded config database
+#        server_name: Optional server name to look up launch_mode from config
+#        launch_mode: Optional explicit launch_mode ('local' or 'remote').
+#                     If not provided, will be auto-detected from config if server_name is given.
+#    """
+#    host_str = str(host)
+#
+#    # Auto-detect launch_mode from config if server_name provided and launch_mode not explicitly set
+#    if launch_mode is None and server_name is not None:
+#        config = VLLMConfig(db=db)
+#        server_config = config.get_server(f"{host_str}.{server_name}")
+#        if server_config:
+#            launch_mode = server_config.get("launch_mode", "remote")
+#
+#    # Default to remote if still not determined
+#    if launch_mode is None:
+#        launch_mode = "remote"
+#
+#    if "uva" in host_str.lower() or "rivanna" in host_str.lower():
+#        return ServerUVA(host_str, db=db, launch_mode=launch_mode)
+#    return ServerDGX(host_str, db=db, launch_mode=launch_mode)
+
+
 def get_server(host, db=None, server_name=None, launch_mode=None):
-    """
-    Helper to instantiate the correct server class based on host.
-
-    Args:
-        host: The hostname (e.g., 'dgx', 'uva')
-        db: Optional pre-loaded config database
-        server_name: Optional server name to look up launch_mode from config
-        launch_mode: Optional explicit launch_mode ('local' or 'remote').
-                     If not provided, will be auto-detected from config if server_name is given.
-    """
+    # -----------------------------------------------------------------
+    # 1️⃣ Resolve the concrete server definition so we can inspect its “type”
+    # -----------------------------------------------------------------
+    cfg = VLLMConfig(db=db)
+    server_cfg = None
     host_str = str(host)
+    if server_name:
+        # try fully‑qualified name first (e.g. “spark.gemma”), then plain name
+        server_cfg = cfg.get_server(f"{host_str}.{server_name}") or cfg.get_server(server_name)
 
-    # Auto-detect launch_mode from config if server_name provided and launch_mode not explicitly set
-    if launch_mode is None and server_name is not None:
-        config = VLLMConfig(db=db)
-        server_config = config.get_server(f"{host_str}.{server_name}")
-        if server_config:
-            launch_mode = server_config.get("launch_mode", "remote")
+    # -----------------------------------------------------------------
+    # 2️⃣ Dispatch to the correct concrete class
+    # -----------------------------------------------------------------
+    if server_cfg and server_cfg.get("type") == "ollama":
+        # Lazy import – avoids a circular import at module load time.
+        from .server_ollama import OllamaServer
+        return OllamaServer(host_str, db=db, launch_mode=launch_mode)
 
-    # Default to remote if still not determined
-    if launch_mode is None:
-        launch_mode = "remote"
-
+    # Existing logic – UVA or DGX
     if "uva" in host_str.lower() or "rivanna" in host_str.lower():
         return ServerUVA(host_str, db=db, launch_mode=launch_mode)
-    return ServerDGX(host_str, db=db, launch_mode=launch_mode)
-
+    return ServerDG
 
 class VLLMOrchestrator:
     """Orchestrates the full pipeline from server start to client launch."""
@@ -195,6 +219,7 @@ class VLLMOrchestrator:
         mem = config.get("mem", "96gb")
         duration = config.get("time", "03:00:00")
         image = vllm_image or "{VLLM_IMAGE}"
+        cpus=config.get("cpus", "16")
 
         # Allow override from config
         custom_script = config.get("submit_script")
@@ -221,7 +246,7 @@ class VLLMOrchestrator:
             #SBATCH --reservation=bi_fox_dgx
             #SBATCH --account=bi_dsc_community
             #SBATCH --gres=gpu:a100:{gpus}
-            #SBATCH --cpus-per-task=32
+            #SBATCH --cpus-per-task={cpus}
             #SBATCH --mem={mem}
             #SBATCH --time={duration}
             #SBATCH --output={remote_dir}/{job_name}.out
@@ -773,7 +798,7 @@ class VLLMOrchestrator:
                         )
                         if s_res.returncode == 0:
                             # Look for AllocTRES or ReqTRES
-                            # Example: AllocTRES=cpu=32,mem=64G,node=1,billing=32,gres/gpu=4
+                            # Example: AllocTRES=cpu=16,mem=64G,node=1,billing=16,gres/gpu=4
                             s_output = s_res.stdout.lower()
                             # Match gres/gpu=N or gres/gpu:N
                             match = re.search(r"gpu[=\:](\d+)", s_output)
@@ -1334,14 +1359,54 @@ class VLLMOrchestrator:
             except Exception:
                 console.warning("Local port is open, but server is not responding. Treating as dead.")
 
-        # 2. Platform-specific Launch
+        # # 2. Platform-specific Launch
+        # with StopWatch.timer("platform_launch"):
+        #     console.banner("Platform Launch")
+            
+        #     # Kill local port immediately upon starting a new server launch
+        #     local_port = port_override or config.get("local_port", 8000)
+        #     self._kill_port_process(local_port)
+            
+        #     process = None
+        #     launch_mode = config.get("launch_mode", "ijob")
+
+        #     if launch_mode == "sbatch":
+        #         if target_host == "uva":
+        #             result = self.launch_uva(name, port_override=port_override)
+        #             if not result:
+        #                 return False
+        #             node_name, process = result
+        #         elif target_host == "dgx":
+        #             if not self.launch_dgx(name, port_override=port_override):
+        #                 return False
+        #         else:
+        #             console.error(
+        #                 f"sbatch launch mode requested but host {target_host} is not supported for sbatch."
+        #             )
+        #             return False
+        #     else:
+        #         # Default flow: Start then Tunnel (ijob)
+        #         if target_host not in ["localhost", "127.0.0.1"]:
+        #             console.print("[blue]Starting vLLM server on remote host...[/blue]")
+        #             server.start(name)
+        #         else:
+        #             console.warning(
+        #                 "Local host detected. Please ensure the vLLM server is started locally."
+        #             )
+        # console.print(
+        #     f"[dim]Platform launch took: {StopWatch.get('platform_launch'):.2f}s[/dim]"
+        # )
+
+
+        # 2. Platform‑specific Launch
         with StopWatch.timer("platform_launch"):
             console.banner("Platform Launch")
-            
-            # Kill local port immediately upon starting a new server launch
+
+            # Kill the local port *before* we start a new server so the
+            # bind‑error is avoided.
             local_port = port_override or config.get("local_port", 8000)
             self._kill_port_process(local_port)
-            
+
             process = None
             launch_mode = config.get("launch_mode", "ijob")
 
@@ -1360,17 +1425,23 @@ class VLLMOrchestrator:
                     )
                     return False
             else:
+                # ---------- Attach the expanded config ----------
+                # The server object (whether it is a DGX, UVA or Ollama server)
+                # does **not** have the configuration attached automatically.
+                # We explicitly give it the dict we just built so that
+                # server.start() can access ``self.server_config``.
+                server.server_config = self.server_config
+
                 # Default flow: Start then Tunnel (ijob)
                 if target_host not in ["localhost", "127.0.0.1"]:
-                    console.print("[blue]Starting vLLM server on remote host...[/blue]")
+                    console.print("[blue]Starting server on remote host...[/blue]")
                     server.start(name)
                 else:
                     console.warning(
-                        "Local host detected. Please ensure the vLLM server is started locally."
+                        "Local host detected. Please ensure the server is started locally."
                     )
-        console.print(
-            f"[dim]Platform launch took: {StopWatch.get('platform_launch'):.2f}s[/dim]"
-        )
+
+
 
         # 3. Final Health Check Poll (Remote check before tunneling)
         COUNT = 60

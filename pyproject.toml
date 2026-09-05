@@ -20,9 +20,8 @@ classifiers = [
 dependencies = [
     "click",
     "rich",
-    "cloudmesh-ai-common",
-    "cloudmesh-ai-cmc",
-    "cloudmesh-ai-theme",
+    "textual",
+    "cloudmesh-ai-resources",
     "python-dotenv>=1.0.0",
 ]
 [tool.setuptools.dynamic]
