@@ -2,7 +2,7 @@
 site/
 .DS_Store
 bin/.DS_Store
-
+cache-username.yaml
 # Environment variables
 .env
 .env.local
