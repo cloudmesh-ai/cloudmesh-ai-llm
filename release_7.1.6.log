@@ -1,0 +1,110 @@
+Release Log for cloudmesh-ai-llm version 7.1.6
+Started at: 2026-09-04T21:21:34.538738
+----------------------------------------
+[2026-09-04 21:21:34] DEBUG: Executing: git describe --tags --abbrev=0
+STDERR:
+fatal: No names found, cannot describe anything.
+
+[2026-09-04 21:21:34] DEBUG: Generating changelog for HEAD...
+[2026-09-04 21:21:34] DEBUG: Executing: git log HEAD --oneline --no-merges
+STDOUT:
+ea6bc4d start potential refactioring for vllm and ollama to also support ollama. NOt finished yet
+9186adc improve gitignore
+7deef3f working towards vllm refactoring
+2a98e7a update sif make
+7ea41bb update makefile for instrauctis to sif image
+60a1515 update duration setting in slurm
+553aee0 improve mock doc
+109c90c fix tunnel, add mock service
+bf0a65c Fix grammar errors in installation documentation
+5231892 Update changelog
+87fa162 Update vLLM orchestrator, server and documentation
+a37065c Fix: use configurable tunnel command in llm.yaml to ensure correct SSH tunnel to compute node
+f22b1b6 Update changelog, readme, todo and tests
+40787ce Implement vLLM command structure and update documentation
+67053ec add dashboard
+bbcbc0d Fix cmc launch: implement secure secret passing, placeholder resolution, and robust Docker command construction for WebUI, Claude, and Aider launchers
+eb78d10 update based on tests
+bc35dab fix user name expansion for remote
+6e90e59 fix job number
+6d9bbc4 Clean up old binary files and update documentation
+2368a32 Implement configuration templates for common LLM models
+4eef1a7 update md ormatting
+f008ef9 Move Configuration Reference into Technical & Developer Guide
+ad86d3d Remove status column from cmc env Command Reference
+7bb28e1 Implement cmc env init command and update documentation
+af24fee Remove emojis from ENVIRONMENT.md headers
+8ff220e Merge environment docs into ENVIRONMENT.md
+c69edd9 Implement Cline and Continue managers and update documentation
+6f692bb add env management
+fd45bc8 switch to .env
+8e33d5c Remove .DS_Store files from repository
+58cb239 update
+8376ea0 update gitignore
+dce8972 add launcher
+0475fec Centralize theme assets and update configuration
+7486e62 Add IMPACT and NEWS documents
+81fa986 Update .gitignore and fix make view
+db5e4dd Fix README 404: rename docs/README.md to docs/readme.md
+db1dbe9 Fix docs: add symlinks for root md files and update mkdocs.yml
+8e83d11 Update version to 7.1.4.dev1
+6c626cb Commit updated Makefiles, mkdocs.yml and documentation changes
+2c777a5 docs: standardize api.md content
+8cac811 docs: remove update.md from navigation
+e7a33f1 docs: ensure index.md links to README.md
+963a97a build: generate requirements.txt from pyproject.toml
+2d8bda3 docs: implement robust force-push publish script
+cab1900 docs: standardize theme, logo, and favicon from example
+d92bdb7 fix: flatten .PHONY list to resolve missing separator error
+99057c7 docs: link index.md to README.md to fix homepage 404
+ead1961 docs: add view target to Makefile
+d7f5cae docs: add .nojekyll for GitHub Pages
+cf094c8 docs: add doc target to Makefile
+13db535 docs: add mkdocs.yml
+909bcdf docs: add missing api.md
+a988063 fix: correct tab indentation in Makefile publish target
+27d9417 docs: update publish target in Makefile
+0fe4c68 refactor: reorganize project structure and move vLLM components
+57548bd add missing files
+6fbb6a6 removeing debug messages
+8cd7ac7 regorg of yaml file and debug of healthcheck
+2663f4a Update README and CHANGELOG for LLM consolidation and fix API key example
+56109ed ai-llm
+ffd93c9 docs: add keywords to changelog entries
+b55c529 Refactor SQueue, add cancel method, fix job retrieval, and add email notifications
+003e18e implemented cancel
+e259314 Implement cmc llm command group, fix circular imports, and add startup benchmarking
+2087658 improve messages
+fa8d28a update stop
+631dc11 Fix UVA image paths and deployment directory structure
+e309340 Improve vLLM health check: use curl /health endpoint with API key and fix local port conflicts
+68df49d Unify gemma launch into ai-llm and implement hybrid script-driven orchestration
+5962896 Update test targets and README
+e8b69a1 Update license format in pyproject.toml
+dbd4ebc Unify gemma launch into ai-llm and implement hybrid script-driven orchestration
+5acad57 docs: update README and Makefile test target
+299684e Update test targets and README
+2bc40e1 Update license format in pyproject.toml
+1c48fd7 update readme
+e447ea3 this works:  cmc launch claude
+439248a this now works: cmc launch webui
+08b5077  make this work: cmc launch aider --docker --force
+17c3c27 try ti integrate aider install
+129c62d complete the openwebgui interface
+af6c59e update tests
+e875b24 Refactor vLLM config, implement tunnel management, health checks, and purge sensitive history
+c302d8f Remove llm set-host command and legacy default_host references
+6aafe01 Change config keys from servers to server and remove redundant defaults
+97cad9d Remove redundant default_host and default_service from config and documentation
+c5803f0 Initial clean commit
+
+[2026-09-04 21:21:35] INFO: Creating baseline git commit...
+[2026-09-04 21:21:35] DEBUG: Executing: git rev-parse HEAD
+STDOUT:
+ea6bc4d58d34f14884caeb0159c5b494644dca7f
+
+[2026-09-04 21:21:35] DEBUG: Executing: git describe --tags --always --dirty
+STDOUT:
+ea6bc4d
+
+[2026-09-04 21:21:35] DEBUG: Executing: git add .
