@@ -34,3 +34,7 @@ env = "cloudmesh.ai.command.env:env_group"
 [tool.setuptools.packages.find]
 where = ["src"]
 include = ["cloudmesh*"]
+
+[tool.cloudmesh-ai]
+status = "beta"
+category = "infrastructure"
